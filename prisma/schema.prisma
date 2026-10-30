@@ -1,5 +1,12 @@
 // DB 스키마. 바꾸면 `npm run db:migrate`로 마이그레이션을 만든다.
 // DB 주소는 prisma.config.ts가 .env에서 읽는다.
+//
+// 규칙
+// - 테이블·칼럼은 snake_case(@map), Prisma 필드와 API는 앱 모델(mapmarker-app/lib/data/models/)과 같은 camelCase.
+// - 시각은 모두 timestamptz(3). Prisma 기본 DateTime은 시간대 없는 timestamp라서 직접 적는다.
+// - Trip·Stop·Segment·Photo의 ID는 앱이 만든 UUID v7을 그대로 받는다(기본값 없음). User만 서버가 만든다.
+// - Prisma가 표현하지 못하는 제약(CHECK, 미룰 수 있는 유일 제약)은 마이그레이션 SQL에 직접 넣었다.
+//   prisma/migrations/*_init/migration.sql 끝부분 참고.
 
 generator client {
   provider     = "prisma-client"
@@ -9,4 +16,173 @@ generator client {
 
 datasource db {
   provider = "postgresql"
+}
+
+/// 직접 바꾼 여행 상태. 자동 상태(기간으로 판단)는 저장하지 않고 앱이 기기 날짜로 계산한다.
+enum TripPhase {
+  before
+  during
+  after
+}
+
+enum Season {
+  spring
+  summer
+  autumn
+  winter
+}
+
+/// 여행을 만든 방법.
+enum TripOrigin {
+  manual
+  ai
+  copy
+}
+
+/// 지도·장소 서비스.
+enum MapProvider {
+  naver
+  google
+}
+
+/// 장소 종류. 숙소만 동선 규칙이 있다.
+enum StopKind {
+  lodging
+  food
+  tour
+  other
+}
+
+/// 구간 종류. 직선·곡선은 curvature로 나뉘고, 그리는 방식이 다른 GPS 트랙만 따로 둔다.
+enum SegmentType {
+  normal
+  gpsTrack @map("gps_track")
+}
+
+/// 사용자. 로그인할 때 서버가 만든다.
+/// 소셜 계정(제공자, 제공자 사용자 ID)과 프로필 칸은 로그인 단위에서 동의 항목을 정한 뒤 더한다.
+model User {
+  id        String   @id @default(uuid(7)) @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  trips Trip[]
+
+  @@map("users")
+}
+
+/// 여행. 지우면 장소·구간이 함께 지워진다(사진이 남아 있으면 막힌다, Photo 참고).
+model Trip {
+  id               String       @id @db.Uuid
+  userId           String       @map("user_id") @db.Uuid
+  title            String
+  /// 예: "부산".
+  region           String
+  /// 몇 박인지. 당일치기는 0. 기간이 있으면 기간에서 계산한 값과 같아야 한다(CHECK).
+  nights           Int
+  season           Season
+  /// 기간. 둘 다 있거나 둘 다 없다(CHECK). 없으면 날짜 미정.
+  startDate        DateTime?    @map("start_date") @db.Date
+  endDate          DateTime?    @map("end_date") @db.Date
+  phaseOverride    TripPhase?   @map("phase_override")
+  /// 직접 고른 지도. 없으면 장소 위치로 자동 선택(2단계).
+  mapProvider      MapProvider? @map("map_provider")
+  origin           TripOrigin   @default(manual)
+  /// 복사 원본. 원본이 지워지면 비운다(복사본은 원본과 연결되지 않는다).
+  copiedFromTripId String?      @map("copied_from_trip_id") @db.Uuid
+  /// 공유 링크 ID. 서버가 만들고, 공유를 끄면 비운다(3단계).
+  shareId          String?      @unique @map("share_id")
+  createdAt        DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt        DateTime     @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  copiedFrom Trip?     @relation("TripCopies", fields: [copiedFromTripId], references: [id], onDelete: SetNull)
+  copies     Trip[]    @relation("TripCopies")
+  stops      Stop[]
+  segments   Segment[]
+
+  // 여행 목록: 내 여행을 최근에 고친 순서로.
+  @@index([userId, updatedAt(sort: Desc)])
+  @@index([copiedFromTripId])
+  @@map("trips")
+}
+
+/// 장소. 여행 안에서 (일차, 순서)로 늘어선 한 줄이다.
+model Stop {
+  id            String       @id @db.Uuid
+  tripId        String       @map("trip_id") @db.Uuid
+  /// 1일차부터 센다(CHECK).
+  day           Int
+  /// 일차 안의 순서. 0부터 빈칸 없이 서비스가 매긴다. 칼럼 이름은 SQL 예약어를 피했다.
+  order         Int          @map("sort_order")
+  latitude      Float
+  longitude     Float
+  name          String
+  kind          StopKind     @default(other)
+  /// 사용자가 쓴 설명. 공유하면 보인다.
+  description   String       @default("")
+  /// 작성자의 개인 기록. 공유하면 숨긴다.
+  memo          String       @default("")
+  /// 예정 시각. 날짜 없이 timeZone 기준 현지 시:분이다(날짜 = 시작일 + 일차 − 1).
+  plannedTime   DateTime?    @map("planned_time") @db.Time(0)
+  visited       Boolean      @default(false)
+  /// 실제로 방문한 순간.
+  visitedAt     DateTime?    @map("visited_at") @db.Timestamptz(3)
+  /// IANA 시간대 이름. 예: Asia/Seoul, Europe/Paris.
+  timeZone      String       @default("Asia/Seoul") @map("time_zone")
+  placeProvider MapProvider? @map("place_provider")
+  placeId       String?      @map("place_id")
+  createdAt     DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt     DateTime     @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  trip     Trip     @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  outgoing Segment? @relation("SegmentFrom")
+  incoming Segment? @relation("SegmentTo")
+  photos   Photo[]
+
+  // 마이그레이션 SQL에서 DEFERRABLE INITIALLY DEFERRED로 만들었다.
+  // 여러 장소의 순서를 한 트랜잭션에서 한꺼번에 밀어도 커밋할 때만 검사한다.
+  @@unique([tripId, day, order], map: "stops_trip_id_day_sort_order_key")
+  @@map("stops")
+}
+
+/// 구간. 이웃한 두 장소 사이에만 있고, 장소마다 나가는 구간과 들어오는 구간이 하나씩이다(동선은 한 줄).
+/// 장소가 지워지면 그 장소의 구간도 지워진다. 새 이웃을 잇는 구간은 서비스가 같은 트랜잭션에서 만든다.
+model Segment {
+  id         String      @id @db.Uuid
+  tripId     String      @map("trip_id") @db.Uuid
+  fromStopId String      @unique @map("from_stop_id") @db.Uuid
+  toStopId   String      @unique @map("to_stop_id") @db.Uuid
+  /// 이동 수단 토막 목록. 갈아타면 여러 개다. 비어 있으면 미정.
+  /// [{ "mode": "subway", "stopCount": 2 }, { "mode": "walk", "durationMinutes": 5 }]
+  /// 안의 모양은 API의 DTO가 검사한다. DB는 배열인지만 본다(CHECK).
+  legs       Json        @default("[]") @db.JsonB
+  /// 곡률 k. 0이면 직선, 부호가 휘는 방향이다. -1~1(CHECK).
+  curvature  Float       @default(0)
+  type       SegmentType @default(normal)
+  createdAt  DateTime    @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt  DateTime    @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  trip     Trip @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  fromStop Stop @relation("SegmentFrom", fields: [fromStopId], references: [id], onDelete: Cascade)
+  toStop   Stop @relation("SegmentTo", fields: [toStopId], references: [id], onDelete: Cascade)
+
+  @@index([tripId])
+  @@map("segments")
+}
+
+/// 장소 사진. 지금은 장소마다 1장이고 서비스가 지킨다(나중에 여러 장으로 늘 수 있다).
+/// 장소를 지우는 쪽은 Restrict라서, 장소·여행·회원을 지우기 전에 서비스가 사진과 S3 파일부터 지워야 한다.
+/// DB만 지우고 S3 파일이 남는 일을 막으려는 것이다.
+model Photo {
+  id         String   @id @db.Uuid
+  stopId     String   @map("stop_id") @db.Uuid
+  /// S3 키. users/{userId}/trips/{tripId}/photos/{photoId}.jpg
+  storageKey String   @unique @map("storage_key")
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  stop Stop @relation(fields: [stopId], references: [id], onDelete: Restrict)
+
+  @@index([stopId])
+  @@map("photos")
 }

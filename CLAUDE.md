@@ -67,7 +67,11 @@ test/
 
 - 버전은 7.10.x로 고정한다. npm의 `latest` 태그가 8.0 RC를 가리키고 있어서, 올릴 때는 버전을 직접 정해 `prisma`와 `@prisma/client`, `@prisma/adapter-pg`를 함께 올린다.
 - 스키마를 바꾸면 `npm run db:migrate -- --name <이름>`으로 마이그레이션을 만들고, 만든 SQL을 확인해 함께 커밋한다. 적용된 마이그레이션 파일은 고치지 않는다.
+- Prisma가 표현하지 못하는 제약(CHECK, 미룰 수 있는 유일 제약)은 `npm run db:migrate -- --create-only --name <이름>`으로 SQL만 만든 뒤 손으로 넣고 적용한다. 적용한 뒤 `npx prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma`가 "No difference detected"인지 확인한다.
+- 테이블·칼럼은 snake_case(`@map`), 필드는 앱 모델과 같은 camelCase. 시각 칼럼은 `@db.Timestamptz(3)`를 붙인다(Prisma 기본은 시간대 없는 timestamp).
+- 앱이 만든 ID(Trip·Stop·Segment·Photo)에는 기본값을 두지 않는다. 서버가 만드는 ID만 `@default(uuid(7))`.
 - DB 연결은 드라이버 어댑터(`@prisma/adapter-pg`)로 한다(`PrismaService`).
+- 스키마 제약은 `test/schema.e2e-spec.ts`에서 실제 DB로 확인한다. 제약을 더하면 여기에 막는 경우와 통과하는 경우를 더한다.
 
 ## 코딩 규칙
 
