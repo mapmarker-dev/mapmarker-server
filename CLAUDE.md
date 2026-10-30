@@ -22,11 +22,19 @@ MapMarker의 API 서버. NestJS 12 + Prisma 7 + PostgreSQL 18, Node 24, 패키�
 - Prisma CLI는 `prisma.config.ts`가 `.env`의 `DATABASE_URL`을 읽는다.
 - e2e는 `TEST_DATABASE_URL`의 DB를 매번 지우고 다시 만든다. DB 이름은 `_test`로 끝나야 한다.
 
+## CI
+
+- GitHub Actions 워크플로 `.github/workflows/ci.yml`. `main`·`dev`·`test`에 push할 때와 `main`으로 가는 PR마다, 작업 하나(`check`)에서 `npm ci` → lint → 형식 확인 → 단위 테스트 → 빌드 → e2e 순서로 돌린다. 빨리 끝나는 검사가 앞이라 실패하면 거기서 멈춘다. `wip/**`는 작업 중 커밋이라 돌리지 않는다.
+- 문서만 바꾼 커밋도 돌린다. 건너뛰면 `main`의 필수 검사가 "대기"에서 멈춰 PR을 병합할 수 없다. 돌리지 않을 push는 커밋 메시지에 `[skip ci]`를 넣는다(`dev`는 검사가 필수가 아니라 막히지 않는다).
+- e2e는 작업 안에서 띄우는 PostgreSQL 서비스 컨테이너(로컬과 같은 `postgres:18-alpine`)로 돌린다. 이 DB의 비밀번호는 그 컨테이너에서만 쓰고 버리는 값이라 워크플로에 적는다. 다른 DB에 재사용하지 않는다. 실제 서비스에 쓰는 값(배포 키 등)은 GitHub Secrets에 둔다.
+- Node는 `.nvmrc`의 24 중 최신, npm은 그 Node에 딸린 버전이다. `npm ci`는 `package-lock.json`이 `package.json`과 맞지 않으면 실패하므로 의존성을 바꾸면 lock 파일을 함께 커밋한다.
+- 브랜치 보호(Settings → Rules → Rulesets): `main`은 PR로만 병합하고 `check` 통과가 필요하다(force push·삭제 금지). `dev`는 force push·삭제만 막는다. 작업 이름 `check`을 바꾸면 ruleset의 필수 검사도 바꾼다.
+
 ## 브랜치
 
 이 저장소는 브랜치를 아래 4개만 운영한다. 다른 브랜치를 새로 만들지 않는다.
 
-- `main`: 기본 브랜치
+- `main`: 기본 브랜치. `dev`에서 PR로만 합친다(CI 통과 필요)
 - `dev`: 개발할 때
 - `test`: 기술 검증 같은 테스트가 필요할 때
 - `wip/<브랜치>` : 공통 규칙의 인수인계용 임시 브랜치
@@ -34,6 +42,8 @@ MapMarker의 API 서버. NestJS 12 + Prisma 7 + PostgreSQL 18, Node 24, 패키�
 ## 폴더 구조
 
 ```
+.github/workflows/
+└─ ci.yml              GitHub Actions CI
 prisma/
 ├─ schema.prisma       DB 스키마
 └─ migrations/         마이그레이션 SQL (커밋한다)
@@ -75,5 +85,5 @@ test/
 
 ## 코딩 규칙
 
-- 커밋 전에 `npm run lint`, `npm run format:check`, `npm test`, `npm run test:e2e`가 통과하는지 확인한다.
+- 커밋 전에 CI와 같은 `npm run lint`, `npm run format:check`, `npm test`, `npm run build`, `npm run test:e2e`가 통과하는지 확인한다.
 - 테스트 이름과 주석은 한국어로 쓴다(앱 저장소와 같음).

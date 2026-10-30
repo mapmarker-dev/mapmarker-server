@@ -4,11 +4,15 @@
 
 ## 지금 하는 일
 
-1-1단계 서버 기본을 하고 있다. 프로젝트 준비(0단계)는 `main`에 있고, **Prisma 스키마와 첫 마이그레이션(B단위)을 `dev`에서 마쳤다.** 1-1의 남은 항목은 CI, 카카오·네이버 로그인, Trip/Stop/Segment CRUD API, 여행 상태다. 1-1 서버 부분이 끝나면 `dev → main` PR로 합친다.
+1-1단계 서버 기본을 하고 있다. 프로젝트 준비(0단계)는 `main`에, Prisma 스키마는 `dev`에 있다. **지금은 CI 단위다.** 워크플로(`.github/workflows/ci.yml`)를 만들었고, 로컬과 Linux 컨테이너(node:24 + postgres:18-alpine)에서 같은 단계가 통과하는 것을 확인했다. **아직 GitHub에서는 돌려 보지 않았다.** 1-1의 남은 항목은 로그인, CRUD API, 여행 상태다. 1-1 서버 부분이 끝나면 `dev → main` PR로 합친다.
 
 ## 다음에 할 첫 단계
 
-1. **다음 단위는 CI다.** GitHub Actions로 push·PR마다 lint·형식·단위·e2e·빌드를 돌린다. e2e는 PostgreSQL 서비스 컨테이너와 CI용 환경 변수(GitHub Secrets가 아니라 워크플로의 테스트 전용 값)로 돌린다. 배포(CD)는 AWS(1-7) 이후다. 시작 전에 범위(대상 브랜치, Node 버전 고정, 브랜치 보호 규칙)를 사용자와 정한다.
+1. **CI 완료 확인** (커밋·push·GitHub 설정은 사용자가 한다)
+   1. `dev`에 커밋하고 push한다 → Actions 탭에서 `CI / check`가 초록인지 본다.
+   2. Ruleset을 만든다. `main`: PR 필수(승인 0), 상태 검사 `check` 필수, force push·삭제 금지. `dev`: force push·삭제 금지. 검사 이름은 워크플로가 한 번 돈 뒤에야 고를 수 있다.
+   3. 빨강 확인: `test` 브랜치에서 테스트 하나를 일부러 깨뜨려 push하고, `test → main` PR에서 ❌와 병합 막힘을 본다. 확인한 뒤 PR을 닫고 원격 `test` 브랜치를 지운다.
+   4. 확인되면 `.github` PLAN 1-1의 CI 항목을 체크한다.
 2. 그다음 단위를 사용자와 정한다. 후보는 둘이다.
    - **로그인:** 네이버·카카오 앱 등록(0단계 미완료)이 먼저 필요하다. 소셜 계정 테이블과 동의 항목도 이때 정한다.
    - **CRUD API:** 로그인 없이 시작하려면 개발용 사용자 확인 방법(임시 헤더 등)을 정해야 한다.
@@ -16,7 +20,7 @@
 
 ## 현재 상태
 
-- `npm run lint`, `npm run format:check`, `npm test`(8개), `npm run test:e2e`(32개: 앱 4, 스키마 28), `npm run build` 통과.
+- `npm run lint`, `npm run format:check`, `npm test`(8개), `npm run build`, `npm run test:e2e`(32개: 앱 4, 스키마 28) 통과. 로컬(Windows, npm 11.6.1)과 Linux 컨테이너(Node 24.22.2, npm 11.19.1) 둘 다.
 - 스키마 결정과 이유는 `prisma/schema.prisma` 주석, 손으로 넣은 제약은 `prisma/migrations/*_init/migration.sql` 끝, 큰 결정(이동 수단 JSON, 사진 Restrict·S3 키)은 `.github` OVERVIEW 결정 표에 있다.
 - 로컬 DB 포트는 `127.0.0.1`에만 연다.
 - `npm audit`: 운영 의존성 0건. 개발 도구 쪽 moderate 20건(sprintf-js 경유)은 런타임에 들어가지 않아 두었다.
@@ -32,11 +36,13 @@
 - **Prisma 오류 메시지:** CHECK·FK·즉시 검사 유일 제약 오류는 메시지에 제약 이름이 들어온다. 커밋 때 걸린 미룬 유일 제약 오류는 `UniqueConstraintViolation`만 오고 이름이 없다. CRUD에서 409·400으로 바꿀 때 참고한다.
 - **값 다루기:** `@db.Date`는 UTC 0시 `Date`로, `@db.Time(0)`은 `1970-01-01T09:30:00Z` 같은 `Date`로 오간다. API는 `"2026-10-15"`, `"09:30"` 문자열로 바꿔서 주고받는다(CRUD 단위).
 - **두 장소가 같은 여행인지, 이웃인지**는 DB가 막지 않는다. 앱이 ID를 보내므로 CRUD 서비스가 같은 트랜잭션에서 확인한다(다른 사람 여행의 장소를 가리키는 요청도 막는다).
+- **lock 파일 보정(CI 단위):** 로컬 npm 11.6.1이 만든 `package-lock.json`에 `@emnapi/core`·`@emnapi/runtime`(wasm 바인딩 `@napi-rs/wasm-runtime`의 선택 peer)이 빠져 있었다. 그래서 CI 쪽 npm 11.19의 `npm ci`가 "lock과 맞지 않음"으로 실패했다. `npx npm@11.19.1 install --package-lock-only`로 두 항목만 더했다. 패키지 버전은 바뀌지 않았고 `peer` 표시만 바뀌었다. 로컬 11.6.1의 `npm ci`도 통과한다.
 
 ## 주의할 점
 
 - `npm install prisma`처럼 버전 없이 설치하면 8.0 RC가 깔린다. Prisma 패키지는 버전을 지정한다.
-- 저장소가 public이다. push 전에 GitHub에서 이 저장소의 Secret scanning·Push protection이 켜져 있는지 확인한다(`.github` PLAN 0단계 항목).
+- 로컬 npm(11.6.1)과 CI npm(Node 24 최신에 딸린 11.19)이 다르다. 로컬에서 `npm install`로 lock을 바꾼 뒤 CI의 `npm ci`만 실패하면 위 lock 보정과 같은 원인일 수 있다. 로컬 Node를 최신 24.x로 올리면 npm도 맞춰진다.
+- npm 11.19는 의존성의 install script(`@prisma/engines`, `prisma` 등)에 `allowScripts` 경고를 낸다. 지금은 경고만 나고 검사는 통과한다. npm이 이 스크립트를 막기 시작하면 `npm install-scripts approve`로 허용 목록을 만든다.
 - `POSTGRES_USER`·`POSTGRES_PASSWORD`·`POSTGRES_DB`는 Docker 볼륨을 처음 만들 때만 적용된다. 바꾸려면 `DATABASE_URL`·`TEST_DATABASE_URL`도 같이 고치고 `docker compose down -v`로 볼륨을 지우고 다시 띄운다(개발 DB 데이터가 지워진다).
 - 개발 DB에는 이번 마이그레이션이 적용돼 있다. 다른 컴퓨터에서는 `npm run db:deploy`(또는 `db:migrate`)로 적용한다.
 - Claude Code 미리보기용 실행 설정은 작업 폴더 루트의 `../.claude/launch.json`에 있다(어느 저장소에도 들어가지 않음).
