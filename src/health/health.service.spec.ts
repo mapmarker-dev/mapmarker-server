@@ -13,8 +13,9 @@ describe('HealthService', () => {
       jest.fn().mockResolvedValue([{ '?column?': 1 }]),
     );
 
+    // CI 빨강 확인용으로 일부러 틀린 값(원래 'ok'). main에 합치지 않는다.
     await expect(service.check()).resolves.toEqual({
-      status: 'ok',
+      status: 'broken',
       database: 'up',
     });
   });
