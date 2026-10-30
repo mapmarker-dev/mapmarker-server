@@ -38,6 +38,8 @@ function setupSwagger(app: INestApplication): void {
       .setTitle('MapMarker API')
       .setDescription('MapMarker 앱 서버 API')
       .setVersion('1')
+      // 화면의 Authorize 버튼에 access 토큰을 넣고 보호된 API를 부른다. 컨트롤러에 @ApiBearerAuth()를 단다.
+      .addBearerAuth()
       .build(),
   );
   SwaggerModule.setup('docs', app, document);

@@ -10,6 +10,7 @@ MapMarker의 API 서버. NestJS 12 + Prisma 7 + PostgreSQL 18, Node 24, 패키�
 - 로컬 DB 켜기·끄기: `npm run db:up` / `npm run db:down` (Docker Compose)
 - 마이그레이션 만들기·적용: `npm run db:migrate` (`prisma migrate dev`)
 - 실행: `npm run start:dev` → API `http://localhost:3000`, Swagger `http://localhost:3000/docs`
+- 개발용 토큰: `npm run dev:token` (개발 DB에 사용자를 만들고 24시간 access 토큰 출력, `-- --user <id>`로 같은 사용자 재사용). Swagger의 Authorize에 붙여 넣는다
 - 빌드: `npm run build`
 - 단위 테스트: `npm test`
 - e2e 테스트: `npm run test:e2e` (DB가 켜져 있어야 한다)
@@ -18,7 +19,8 @@ MapMarker의 API 서버. NestJS 12 + Prisma 7 + PostgreSQL 18, Node 24, 패키�
 ## 환경 변수
 
 - 값은 `.env`에 둔다. `.env`는 커밋하지 않고, 항목 목록은 `.env.example`에 둔다. 새 변수를 추가하면 `.env.example`과 `src/config/env.ts`의 `Env`도 함께 고친다.
-- 서버 코드는 `ConfigService<Env, true>`로만 값을 읽는다. `process.env`를 직접 읽지 않는다. 시작할 때 `Env`로 검사해서, 빠지거나 틀리면 서버가 뜨지 않는다.
+- 서버 코드는 `ConfigService<Env, true>`로만 값을 읽는다. `process.env`를 직접 읽지 않는다. 시작할 때 `Env`로 검사해서, 빠지거나 틀리면 서버가 뜨지 않는다. `scripts/`는 서버 코드가 아니라서 `dotenv`로 읽고 같은 `validateEnv`로 검사한다.
+- `JWT_ACCESS_SECRET`(32자 이상)은 로컬 `.env`에 직접 만든 무작위 값을 둔다(만드는 명령은 `.env.example`). e2e는 `test/setup/env.ts`의 테스트 전용 값을 써서 CI 워크플로에는 없다. 운영 값은 1-7단계에서 AWS(SSM Parameter Store 또는 Secrets Manager)에 둔다.
 - Prisma CLI는 `prisma.config.ts`가 `.env`의 `DATABASE_URL`을 읽는다.
 - e2e는 `TEST_DATABASE_URL`의 DB를 매번 지우고 다시 만든다. DB 이름은 `_test`로 끝나야 한다.
 
@@ -49,17 +51,19 @@ prisma/
 └─ migrations/         마이그레이션 SQL (커밋한다)
 prisma.config.ts       Prisma CLI 설정
 docker-compose.yml     로컬 PostgreSQL (개발 DB와 e2e 테스트 DB)
+scripts/               개발용 스크립트 (ts-node로 실행, 빌드에 들어가지 않음)
 src/
 ├─ main.ts             부트스트랩 → configureApp → listen
 ├─ app.module.ts       전역 모듈(Config, Prisma)과 기능 모듈
 ├─ app.setup.ts        configureApp: ValidationPipe, URI 버전(/v1), Swagger
 ├─ config/             환경 변수 검사(Env)
 ├─ prisma/             PrismaModule(전역), PrismaService
+├─ auth/               access 토큰 서명·검사, 전역 가드, @Public, @CurrentUser
 ├─ generated/prisma/   Prisma Client 생성물 (커밋하지 않음)
-└─ <기능>/             기능 모듈. 예: health, (다음) auth, trips, photos
+└─ <기능>/             기능 모듈. 예: health, (다음) trips, photos
 test/
 ├─ *.e2e-spec.ts       e2e 테스트
-└─ setup/              테스트 DB 준비(global-setup), 테스트용 환경 변수
+└─ setup/              테스트 DB 준비(global-setup), 테스트용 환경 변수, 토큰 도우미(auth.ts)
 ```
 
 - 기능 폴더는 `xxx.module.ts`, `xxx.controller.ts`, `xxx.service.ts`, `dto/`로 시작하고, 단위 테스트(`*.spec.ts`)는 같은 폴더에 둔다.
@@ -72,6 +76,14 @@ test/
 - 요청 본문은 DTO 클래스(class-validator)로 검사한다. DTO에 없는 필드는 400으로 거절한다.
 - Swagger에 보이도록 DTO에 `@ApiProperty`, 컨트롤러에 응답 데코레이터를 단다. production(`NODE_ENV`)에서는 Swagger를 열지 않는다.
 - JSON 필드 이름은 앱 모델(`../mapmarker-app/lib/data/models/`)과 같은 camelCase로 맞춘다.
+
+## 인증
+
+- 모든 경로에 `JwtAuthGuard`가 걸린다(`AuthModule`의 `APP_GUARD`). 토큰 없이 열 경로만 `@Public()`을 붙인다(지금은 `/health`). Swagger(`/docs`)는 Nest 경로가 아니라서 가드가 닿지 않는다.
+- 요청한 사용자는 컨트롤러 인자 `@CurrentUser() user: AuthUser`로 꺼낸다. `AuthUser`는 인터페이스라 `import type`으로 불러온다(데코레이터가 붙은 인자 타입은 `isolatedModules`에서 type import여야 한다. 단위 테스트는 통과하고 `npm run build`만 실패한다).
+- 보호된 컨트롤러에는 `@ApiBearerAuth()`와 `@ApiUnauthorizedResponse()`를 단다.
+- access 토큰은 HS256, 내용은 `sub`(사용자 ID)·`iat`·`exp`만, 15분이다(`src/auth/access-token.ts`). 가드는 서명·만료만 보고 DB는 보지 않는다. 틀린 이유는 드러내지 않고 모두 401이다.
+- 아이디·비밀번호 로그인은 만들지 않는다. 운영에서 토큰을 얻는 길은 소셜 로그인뿐이고, 로컬은 `npm run dev:token`, 테스트는 `test/setup/auth.ts`의 `createUserWithToken(app)`을 쓴다.
 
 ## Prisma
 

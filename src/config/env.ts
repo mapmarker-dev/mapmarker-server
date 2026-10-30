@@ -4,9 +4,11 @@ import { plainToInstance } from 'class-transformer';
 import {
   IsEnum,
   IsInt,
+  IsString,
   Matches,
   Max,
   Min,
+  MinLength,
   validateSync,
 } from 'class-validator';
 
@@ -30,6 +32,11 @@ export class Env {
     message: 'DATABASE_URL은 postgresql:// 주소여야 합니다',
   })
   DATABASE_URL: string;
+
+  /** access 토큰 서명 키(HS256). 짧으면 대입 공격에 약해서 32자 이상만 받는다. */
+  @IsString({ message: 'JWT_ACCESS_SECRET을 넣어 주세요' })
+  @MinLength(32, { message: 'JWT_ACCESS_SECRET은 32자 이상이어야 합니다' })
+  JWT_ACCESS_SECRET: string;
 }
 
 /** `ConfigModule`의 `validate`. 값은 환경 변수가 .env보다 우선한다. */
