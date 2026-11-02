@@ -9,10 +9,12 @@ import {
   ApiServiceUnavailableResponse,
   ApiTags,
 } from '@nestjs/swagger';
+import { Public } from '../auth/public.decorator';
 import { HealthResponse } from './dto/health-response.dto';
 import { HealthService } from './health.service';
 
-/** 상태 확인. 로드밸런서가 부를 주소라 API 버전(/v1)을 붙이지 않는다. */
+/** 상태 확인. 로드밸런서가 부를 주소라 API 버전(/v1)을 붙이지 않고, 토큰 없이 연다. */
+@Public()
 @ApiTags('health')
 @Controller({ path: 'health', version: VERSION_NEUTRAL })
 export class HealthController {

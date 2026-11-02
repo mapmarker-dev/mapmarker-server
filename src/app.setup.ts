@@ -4,7 +4,9 @@ import {
   VersioningType,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { HttpAdapterHost } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import { PrismaExceptionFilter } from './common/prisma-exception.filter';
 import { Env, NodeEnv } from './config/env';
 
 /**
@@ -18,6 +20,10 @@ export function configureApp(app: INestApplication): void {
       forbidNonWhitelisted: true,
       transform: true,
     }),
+  );
+  // 중복 ID(409)·없는 대상(404)처럼 뜻이 분명한 Prisma 오류를 HTTP 오류로 바꾼다.
+  app.useGlobalFilters(
+    new PrismaExceptionFilter(app.get(HttpAdapterHost).httpAdapter),
   );
 
   // 경로 앞에 /v1을 붙인다. 깔린 앱은 바로 업데이트되지 않아서, 깨지는 변경은 새 버전으로 낸다.
@@ -38,6 +44,8 @@ function setupSwagger(app: INestApplication): void {
       .setTitle('MapMarker API')
       .setDescription('MapMarker 앱 서버 API')
       .setVersion('1')
+      // 화면의 Authorize 버튼에 access 토큰을 넣고 보호된 API를 부른다. 컨트롤러에 @ApiBearerAuth()를 단다.
+      .addBearerAuth()
       .build(),
   );
   SwaggerModule.setup('docs', app, document);

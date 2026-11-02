@@ -1,0 +1,75 @@
+# 서버 CI: push·PR마다 lint, 형식, 단위 테스트, 빌드, e2e를 돌린다.
+# main의 브랜치 보호(ruleset)가 이 작업(check)의 통과를 병합 조건으로 쓴다. 작업 이름을 바꾸면 ruleset도 고친다.
+name: CI
+
+on:
+  push:
+    # wip/**는 작업 중 커밋이라 돌리지 않는다.
+    branches: [main, dev, test]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+# 워크플로가 받는 토큰은 코드 읽기만 한다.
+permissions:
+  contents: read
+
+# 같은 브랜치(또는 같은 PR)에 새로 push하면 이전 실행을 취소한다.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    # e2e용 PostgreSQL. 이 작업 동안만 러너 안에서 뜨고 끝나면 사라진다.
+    # 비밀번호는 이 컨테이너에서만 쓰는 값이라 Secrets에 두지 않는다. 다른 DB에 재사용하지 않는다.
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_USER: mapmarker
+          POSTGRES_PASSWORD: ci-only-not-secret
+          POSTGRES_DB: mapmarker
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U mapmarker -d mapmarker"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+
+    # e2e가 지우고 다시 만드는 DB(이름이 _test로 끝나야 한다). 단위 테스트·빌드는 DB 주소가 필요 없다.
+    env:
+      TEST_DATABASE_URL: postgresql://mapmarker:ci-only-not-secret@localhost:5432/mapmarker_test
+
+    # 빨리 끝나는 검사부터 돌려서, 실패하면 무거운 e2e까지 가지 않고 멈춘다.
+    steps:
+      - name: 코드 받기
+        uses: actions/checkout@v7
+
+      - name: Node 설치 (.nvmrc)
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: 의존성 설치 (Prisma Client 생성 포함)
+        run: npm ci
+
+      - name: lint
+        run: npm run lint
+
+      - name: 형식 확인
+        run: npm run format:check
+
+      - name: 단위 테스트
+        run: npm test
+
+      - name: 빌드
+        run: npm run build
+
+      - name: e2e 테스트
+        run: npm run test:e2e
