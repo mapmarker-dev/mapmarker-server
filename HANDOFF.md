@@ -6,28 +6,29 @@
 
 1-1단계 서버 기본을 하고 있다. 프로젝트 준비(0단계)는 `main`에, Prisma 스키마와 CI는 `dev`에 있다. CI 단위는 끝났다(확인용 PR #1은 닫았다, ruleset 규칙은 `CLAUDE.md`의 CI 절).
 
-**지금은 "자체 JWT 인증 + Trip/Stop/Segment CRUD" 단위를 하고 있다. A(인증)를 마쳤다.** 1-1의 남은 항목은 JWT 인증, CRUD API, 여행 상태, 소셜 로그인이다(PLAN 1-1을 이 순서로 고쳤다). 1-1 서버 부분이 끝나면 `dev → main` PR로 합친다(PR로만 합칠 수 있다).
+**지금은 "자체 JWT 인증 + Trip/Stop/Segment CRUD" 단위를 하고 있다. A(인증)와 B(Trip CRUD·여행 상태)를 마쳤다. 다음은 C(장소·구간 쓰기)다.** 1-1의 남은 항목은 CRUD API(장소·구간), 소셜 로그인이다(PLAN 1-1을 이 순서로 고쳤다). 1-1 서버 부분이 끝나면 `dev → main` PR로 합친다(PR로만 합칠 수 있다).
 
 ## 다음에 할 첫 단계
 
 1. **이번 단위는 "자체 JWT 인증 + Trip/Stop/Segment CRUD"다(사용자와 합의).** 소셜 로그인은 그다음 단위다.
    - 왜: CRUD는 처음부터 "누구의 여행인가"(소유자 확인)가 필요하다. 임시 헤더 같은 가짜 방식은 나중에 걷어 내야 하지만, 서버가 발급한 access 토큰을 검사하는 가드는 그대로 남는다. 소셜 로그인은 "네이버·카카오 토큰 → 사용자 찾기·만들기 → 이 JWT 발급"만 더하면 된다. 그동안 사용자가 네이버·카카오 앱 등록(0단계)을 한다.
    - 소셜 로그인 단위에서 정할 것: 소셜 계정 테이블, 동의 항목, refresh 토큰(설계만 정함: 아래).
-2. **설계는 확정됐다(2026-11-02, 아래 "이번 단위 설계").** 순서는 A 인증 → B Trip → C Stop·Segment → D 문서. **A는 끝났다**(인증 규칙은 `CLAUDE.md`의 인증 절). **다음은 B(Trip CRUD와 여행 상태)다:** 공통 코드(`src/common/`: Prisma 오류 필터, 날짜 문자열 변환, ID 검사)부터 만들고, e2e는 `test/setup/auth.ts`의 `createUserWithToken`을 쓴다. 각 부분이 끝나면 CI와 같은 5가지 검사를 돌리고 커밋 메시지를 준다.
+2. **설계는 확정됐다.** 순서는 A 인증 → B Trip → C Stop·Segment → D 문서. **A·B는 끝났다**(규칙은 `CLAUDE.md`의 API 규칙·인증 절). **다음은 C다:** `src/trips/`에 장소 넣기·고치기·옮기기·지우기와 구간 고치기를 더한다. 동선 다시 잇기는 앱의 `route_links.dart`(`linkStops`)를 순수 함수로 옮기고 앱 테스트 사례를 단위 테스트로 옮긴다. 장소·구간 ID는 `common/app-id.ts`의 도우미로 받는다(Swagger 예시가 v7이 된다). 동선을 바꾸는 요청은 `lockOwnedTrip`부터 부르고 `toTripDetailResponse`로 돌려준다(읽기 쪽 응답 모양은 B에서 만들었다). 각 부분이 끝나면 5가지 검사를 돌리고 커밋 메시지를 준다.
 
 ## 이번 단위 설계 (확정, 구현하면서 CLAUDE.md·코드 주석으로 옮기고 여기서 지운다)
 
 - **refresh(소셜 로그인 단위에서 만든다):** JWT가 아닌 무작위 문자열, DB에는 해시만, 쓸 때마다 교체, 로그아웃·탈퇴 때 지움, 30일 정도. DB에 있어야 강제로 끊을 수 있어서다.
 - **구간 ID는 서버가 만든다**(OVERVIEW 고침). 서버가 장소 넣기·옮기기·지우기 때 앱의 `linkStops`와 같은 규칙으로 구간을 만들고 지운다. 구간 고치기는 ID가 그대로다. Segment.id에 `@default(uuid(7))`를 붙이고 스키마 주석·CLAUDE.md의 ID 규칙도 고친다(C).
-- **경로:** 목록·만들기는 중첩(`/v1/trips`, `/v1/trips/:tripId/stops`), 하나는 자기 ID로(`/v1/trips/:tripId`, `/v1/stops/:stopId`, `PUT /v1/stops/:stopId/position`, `/v1/segments/:segmentId`). 장소 구조를 바꾸는 요청과 여행 하나 조회는 `{ trip, stops, segments }`를 돌려준다. 여행 기간은 앱처럼 `dates: { start, end } | null`. `visited`·`visitedAt`은 1-4에서 받는다. `origin`·`copiedFromTripId`·`shareId`는 받지 않는다.
+- **경로(C):** 장소 만들기 `POST /v1/trips/:tripId/stops`, 하나는 자기 ID로(`PATCH·DELETE /v1/stops/:stopId`, `PUT /v1/stops/:stopId/position`, `PATCH /v1/segments/:segmentId`). 장소 구조를 바꾸는 요청은 `{ trip, stops, segments }`(B의 `TripDetailResponse`)를 돌려준다. `PATCH /v1/stops/:stopId`는 일차·순서를 받지 않고 `Stop`을, 구간 고치기는 `Segment`를 돌려준다. `visited`·`visitedAt`은 1-4에서 받는다. 장소 이름 50자, 설명·메모 1000자(앱 입력 제한과 같음).
 - **검사:** ID는 `IsUUID('7')`, 일차 범위 밖 400, `order`가 장소 수보다 크면 맨 뒤, legs 최대 5토막·수단 7개·`stopCount` 1~99(지하철·버스만)·`durationMinutes` 1~5999, `timeZone`은 IANA 이름. "밤 숙소 뒤에는 숙소만"은 화면 규칙이라 서버가 막지 않는다.
 - **트랜잭션:** 동선을 바꾸는 요청은 여행 줄을 `FOR UPDATE`로 잠그고(소유자 확인 겸), 메모리에서 순서를 다시 매겨 바뀐 장소만 고친 뒤(미룬 유일 제약), 사라진 구간을 먼저 지우고 새 구간을 만든다(구간 양 끝 유일 제약은 즉시 검사). 여행 `updatedAt`도 바꾼다.
-- **오류:** Nest 기본 모양. 400 검사, 401 토큰, 404 없음·남의 자원(존재를 숨긴다), 409 중복 ID·기간을 줄였는데 장소가 남음·사진 달린 삭제. 전역 Prisma 필터는 유일 위반 → 409, 대상 없음 → 404만 바꾸고 나머지는 500(서비스가 놓친 버그).
+- **오류(C):** 사진은 장소를 Restrict로 가리켜서, 장소 지우기도 여행 지우기처럼 P2003을 409로 바꾼다. 커밋 때 걸린 미룬 유일 제약은 Prisma 오류가 아니라 `DriverAdapterError`(kind `UniqueConstraintViolation`)로 와서 필터에 걸리지 않고 500이다. 여행 줄을 잠그면 생기지 않아야 하는 버그라 그대로 둔다.
 
 ## 현재 상태
 
-- `npm run lint`, `npm run format:check`, `npm test`(20개), `npm run build`, `npm run test:e2e`(38개: 앱 4, 인증 6, 스키마 28) 로컬 통과(2026-11-02). A는 아직 커밋·push 전이라 CI는 확인하지 않았다.
-- `npm run dev:token` → Swagger Authorize → `GET /v1/auth/me` 200, 토큰 없이 401을 손으로 확인했다. 없는 `--user`와 `NODE_ENV=production`에서는 토큰을 내지 않는다.
+- `npm run lint`, `npm run format:check`, `npm test`(32개), `npm run build`, `npm run test:e2e`(75개: 앱 4, 인증 6, 여행 37, 스키마 28) 로컬 통과(2026-11-02). A는 `dev` push에서 CI 초록을 확인했다. B는 아직 커밋 전이다.
+- `npm run dev:token` 토큰으로 여행 만들기 201 → 상태 바꾸기 200 → 조회 200 → 박 수 불일치 400 → 지우기 204를 손으로 확인했다. Windows Git Bash의 curl은 명령줄의 한글을 UTF-8이 아닌 코드 페이지로 보내 깨진다(서버 문제 아님, e2e에서는 한글이 맞게 오간다). 한글이 든 요청은 Swagger로 확인한다.
+- Prisma 7(어댑터) 오류 코드: 유일 위반 P2002, Restrict P2003, 대상 없음 P2025, CHECK 위반 P2039.
 - `@nestjs/jwt`는 CI와 같은 npm 11.19.1(`npx npm@11.19.1 install`)로 설치해서 lock 파일이 CI의 `npm ci`와 맞는다.
 - 스키마 결정과 이유는 `prisma/schema.prisma` 주석, 손으로 넣은 제약은 `prisma/migrations/*_init/migration.sql` 끝, 큰 결정(이동 수단 JSON, 사진 Restrict·S3 키)은 `.github` OVERVIEW 결정 표에 있다.
 - 로컬 DB 포트는 `127.0.0.1`에만 연다.

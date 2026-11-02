@@ -1,7 +1,8 @@
 import { ApiProperty } from '@nestjs/swagger';
+import { ApiIdProperty } from '../../common/app-id';
 
 export class MeResponse {
-  @ApiProperty({ format: 'uuid' })
+  @ApiIdProperty()
   id: string;
 
   @ApiProperty({ format: 'date-time' })

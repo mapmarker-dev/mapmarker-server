@@ -68,7 +68,7 @@ test/
 
 - 기능 폴더는 `xxx.module.ts`, `xxx.controller.ts`, `xxx.service.ts`, `dto/`로 시작하고, 단위 테스트(`*.spec.ts`)는 같은 폴더에 둔다.
 - 컨트롤러는 요청·응답만 다루고, 규칙과 DB 접근은 서비스에 둔다.
-- 기능끼리 같이 쓸 코드는 `common/`(필요해지면 만든다)으로 옮긴다.
+- 기능끼리 같이 쓸 코드는 `common/`으로 옮긴다(지금: Prisma 오류 필터, 날짜·시각 문자열 변환, 앱 ID 검사, `@CanOmit()`).
 
 ## API 규칙
 
@@ -76,6 +76,13 @@ test/
 - 요청 본문은 DTO 클래스(class-validator)로 검사한다. DTO에 없는 필드는 400으로 거절한다.
 - Swagger에 보이도록 DTO에 `@ApiProperty`, 컨트롤러에 응답 데코레이터를 단다. production(`NODE_ENV`)에서는 Swagger를 열지 않는다.
 - JSON 필드 이름은 앱 모델(`../mapmarker-app/lib/data/models/`)과 같은 camelCase로 맞춘다.
+- 날짜는 `"2026-10-15"`, 예정 시각은 `"09:30"` 문자열로 주고받는다(`common/local-date.ts`·`local-time.ts`). 순간(`createdAt` 등)은 ISO 8601 UTC 문자열이다.
+- 앱이 만든 ID(UUID v7)는 `common/app-id.ts`로 받는다. 본문 필드는 `@IsAppId()`, 경로는 `AppIdParam(name)` + 메서드에 `@ApiAppIdParam(name)`, 응답의 ID는 `@ApiIdProperty()`. 틀리면 400("…는 앱이 만든 UUID v7이어야 합니다")이다. Swagger 기본 예시는 v4라서 그대로 보내면 400이 나므로, 이 도우미들이 예시를 v7로 바꿔 둔다.
+- PATCH DTO에서 null로 지울 수 없는 필드는 `@CanOmit()`, null로 지우는 필드는 `@IsOptional()`을 쓴다. `@IsOptional()`은 null도 건너뛰어서 null이 DB까지 가면 500이 난다.
+- **남의 자원은 404로 숨긴다.** 쿼리를 사용자 ID로 걸러(`where: { id, userId }`) "없음"과 "남의 것"이 똑같이 보이게 한다. 403은 쓰지 않는다.
+- 여행의 동선 규칙(기간, 장소 순서)을 확인하고 바꾸는 요청은 트랜잭션 안에서 `lockOwnedTrip(tx, userId, tripId)`로 여행 줄부터 잠근다(소유자 확인 겸, 404).
+- 오류: 400 입력, 401 토큰, 404 없음·남의 것, 409 중복 ID·상태 충돌. 예상하는 경우는 서비스가 먼저 확인하고, 전역 `PrismaExceptionFilter`는 남은 P2002 → 409, P2025 → 404만 바꾼다. 다른 DB 오류는 서비스가 놓친 버그라 500으로 둔다.
+- 테스트용 UUID v7은 `test/setup/ids.ts`의 `uuidv7()`로 만든다.
 
 ## 인증
 
