@@ -94,6 +94,129 @@ describe('DB 스키마 (e2e)', () => {
 
       expect(user.id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab]/);
     });
+
+    it('닉네임은 없어도 되고, 30자까지 넣을 수 있다', async () => {
+      expect((await createUser()).nickname).toBeNull();
+
+      const user = await prisma.user.create({
+        data: { nickname: '가'.repeat(30) },
+      });
+      expect(user.nickname).toHaveLength(30);
+    });
+
+    it('닉네임이 30자를 넘으면 거절한다', async () => {
+      await expect(
+        prisma.user.create({ data: { nickname: '가'.repeat(31) } }),
+      ).rejects.toThrow('users_nickname_length_check');
+    });
+  });
+
+  describe('SocialAccount', () => {
+    it('제공자와 제공자 사용자 ID를 저장한다', async () => {
+      const user = await createUser();
+
+      const account = await prisma.socialAccount.create({
+        data: { userId: user.id, provider: 'kakao', providerUserId: '1234' },
+      });
+
+      expect(account).toMatchObject({
+        userId: user.id,
+        provider: 'kakao',
+        providerUserId: '1234',
+      });
+    });
+
+    it('같은 제공자의 같은 사용자 ID는 한 번만 있다', async () => {
+      const [a, b] = [await createUser(), await createUser()];
+      await prisma.socialAccount.create({
+        data: { userId: a.id, provider: 'naver', providerUserId: 'abc' },
+      });
+
+      await expect(
+        prisma.socialAccount.create({
+          data: { userId: b.id, provider: 'naver', providerUserId: 'abc' },
+        }),
+      ).rejects.toThrow(Prisma.PrismaClientKnownRequestError);
+    });
+
+    it('제공자가 다르면 같은 사용자 ID여도 다른 계정이다', async () => {
+      const [a, b] = [await createUser(), await createUser()];
+
+      await prisma.socialAccount.create({
+        data: { userId: a.id, provider: 'kakao', providerUserId: 'same' },
+      });
+      await prisma.socialAccount.create({
+        data: { userId: b.id, provider: 'naver', providerUserId: 'same' },
+      });
+
+      expect(await prisma.socialAccount.count()).toBe(2);
+    });
+
+    it('한 사용자는 제공자마다 소셜 계정을 하나만 둔다', async () => {
+      const user = await createUser();
+      await prisma.socialAccount.create({
+        data: { userId: user.id, provider: 'kakao', providerUserId: '1' },
+      });
+
+      await expect(
+        prisma.socialAccount.create({
+          data: { userId: user.id, provider: 'kakao', providerUserId: '2' },
+        }),
+      ).rejects.toThrow(Prisma.PrismaClientKnownRequestError);
+    });
+
+    it('제공자 사용자 ID는 비어 있을 수 없다', async () => {
+      const user = await createUser();
+
+      await expect(
+        prisma.socialAccount.create({
+          data: { userId: user.id, provider: 'kakao', providerUserId: '' },
+        }),
+      ).rejects.toThrow('social_accounts_provider_user_id_check');
+    });
+  });
+
+  describe('AuthSession', () => {
+    const in30Days = () => new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+
+    it('토큰 해시는 SHA-256 길이(32바이트)만 받는다', async () => {
+      const user = await createUser();
+
+      const session = await prisma.authSession.create({
+        data: {
+          userId: user.id,
+          tokenHash: new Uint8Array(32),
+          expiresAt: in30Days(),
+        },
+      });
+      expect(session.tokenHash).toHaveLength(32);
+
+      await expect(
+        prisma.authSession.create({
+          data: {
+            userId: user.id,
+            tokenHash: new Uint8Array(16),
+            expiresAt: in30Days(),
+          },
+        }),
+      ).rejects.toThrow('auth_sessions_token_hash_length_check');
+    });
+
+    it('한 사용자가 여러 기기에서 로그인할 수 있다', async () => {
+      const user = await createUser();
+
+      for (let i = 0; i < 2; i++) {
+        await prisma.authSession.create({
+          data: {
+            userId: user.id,
+            tokenHash: new Uint8Array(32),
+            expiresAt: in30Days(),
+          },
+        });
+      }
+
+      expect(await prisma.authSession.count()).toBe(2);
+    });
   });
 
   describe('Trip', () => {
@@ -447,6 +570,25 @@ describe('DB 스키마 (e2e)', () => {
       await prisma.user.delete({ where: { id: user.id } });
 
       expect(await prisma.trip.count()).toBe(0);
+    });
+
+    it('회원을 지우면 소셜 계정과 로그인 세션이 함께 지워진다', async () => {
+      const user = await createUser();
+      await prisma.socialAccount.create({
+        data: { userId: user.id, provider: 'kakao', providerUserId: '1' },
+      });
+      await prisma.authSession.create({
+        data: {
+          userId: user.id,
+          tokenHash: new Uint8Array(32),
+          expiresAt: new Date(Date.now() + 60_000),
+        },
+      });
+
+      await prisma.user.delete({ where: { id: user.id } });
+
+      expect(await prisma.socialAccount.count()).toBe(0);
+      expect(await prisma.authSession.count()).toBe(0);
     });
   });
 });

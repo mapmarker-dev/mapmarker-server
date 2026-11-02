@@ -82,10 +82,10 @@ test/                      *.e2e-spec.ts, setup/(테스트 DB, 환경 변수, �
 ## Prisma
 
 - 7.10.x로 고정한다(`latest`가 8.0 RC). 올릴 때 버전을 정해 `prisma`·`@prisma/client`·`@prisma/adapter-pg`를 함께.
-- 스키마를 바꾸면 `npm run db:migrate -- --name <이름>`, 만든 SQL을 확인해 커밋한다. 적용된 마이그레이션은 고치지 않는다.
+- 스키마를 바꾸면 `npm run db:migrate -- --name <이름>`, 만든 SQL을 확인해 커밋한다. 적용된 마이그레이션은 고치지 않는다. Prisma 7의 `migrate dev`는 Client를 다시 만들지 않으니 `npm run prisma:generate`도 돌린다(안 하면 새 모델이 `undefined`).
 - Prisma가 못 쓰는 제약(CHECK, 미룰 수 있는 유일 제약)은 `-- --create-only`로 SQL만 만들어 손으로 넣는다. 적용 뒤 `npx prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma`가 "No difference detected"인지 본다.
 - 테이블·칼럼은 snake_case(`@map`), 시각 칼럼은 `@db.Timestamptz(3)`.
-- 앱이 만든 ID(Trip·Stop·Photo)는 기본값 없음. 서버가 만드는 ID(User·Segment)만 `@default(uuid(7))`(Prisma가 만드는 값이라 마이그레이션은 없다).
+- 앱이 만든 ID(Trip·Stop·Photo)는 기본값 없음. 서버가 만드는 ID(User·Segment·SocialAccount·AuthSession)만 `@default(uuid(7))`(Prisma가 만드는 값이라 마이그레이션은 없다).
 - 연결은 드라이버 어댑터(`@prisma/adapter-pg`, `PrismaService`).
 - 스키마 제약은 `test/schema.e2e-spec.ts`에서 실제 DB로 확인한다. 제약을 더하면 막는 경우와 통과하는 경우를 더한다.
 
