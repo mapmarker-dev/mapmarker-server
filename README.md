@@ -4,8 +4,12 @@
 
 ## 지금 상태
 
-- 0단계(준비): NestJS + Prisma 프로젝트, 로컬 PostgreSQL, 테스트 기본 설정을 마쳤습니다. 지금은 상태 확인(`GET /health`)과 Swagger 문서만 있습니다.
-- 다음은 1-1단계의 DB 스키마(User, Trip, Stop, Segment, Photo), 그다음 로그인과 여행 API입니다.
+1-1단계(서버 기본)를 진행하고 있습니다.
+
+- DB 스키마(User, Trip, Stop, Segment, Photo)와 CI(GitHub Actions: lint, 형식, 단위, 빌드, e2e)
+- 서버가 발급한 access 토큰(JWT)을 검사하는 인증. 모든 API에 걸려 있고 `/health`만 열려 있습니다
+- 여행·장소·구간 API(`/v1/trips`, `/v1/stops`, `/v1/segments`). 장소를 넣고 옮기고 지우면 서버가 이웃한 장소 사이 구간을 앱과 같은 규칙으로 다시 잇습니다
+- 다음은 카카오·네이버 로그인입니다. 그전까지 로컬에서는 `npm run dev:token`으로 토큰을 받습니다
 
 단계별 계획은 [PLAN](https://github.com/mapmarker-dev/.github/blob/main/docs/PLAN.md)에 있습니다.
 
@@ -24,10 +28,17 @@ git clone https://github.com/mapmarker-dev/mapmarker-server.git
 cd mapmarker-server
 ```
 
-`.env.example`을 `.env`로 복사하고 `set-me`를 직접 정한 비밀번호로 바꿉니다(세 군데 모두 같은 값). `.env`는 커밋하지 않습니다.
+`.env.example`을 `.env`로 복사합니다. `.env`는 커밋하지 않습니다.
 
 ```bash
 cp .env.example .env
+```
+
+- DB 비밀번호: `POSTGRES_PASSWORD`, `DATABASE_URL`, `TEST_DATABASE_URL`의 `set-me`를 직접 정한 같은 비밀번호로 바꿉니다.
+- 토큰 서명 키: `JWT_ACCESS_SECRET`에는 32자 이상의 무작위 값을 넣습니다. 아래 명령의 출력을 그대로 쓰면 됩니다.
+
+```bash
+node -e "console.log(require('node:crypto').randomBytes(32).toString('base64url'))"
 ```
 
 의존성을 받고(Prisma Client도 이때 만들어집니다), DB를 켜고, 마이그레이션을 적용한 뒤 실행합니다.
@@ -43,6 +54,12 @@ npm run start:dev
 - 상태 확인: http://localhost:3000/health
 - API 문서(Swagger): http://localhost:3000/docs
 
+API를 부르려면 토큰이 필요합니다. 로그인이 생기기 전까지는 개발용 토큰을 받아서 Swagger 오른쪽 위 **Authorize**에 토큰만(`Bearer` 없이) 넣습니다. 개발 DB에 사용자를 하나 만들고 24시간짜리 토큰을 출력합니다.
+
+```bash
+npm run dev:token
+```
+
 ## 명령어
 
 | 하는 일 | 명령어 |
@@ -51,6 +68,7 @@ npm run start:dev
 | 마이그레이션 만들기·적용 (개발) | `npm run db:migrate` |
 | 마이그레이션 적용만 | `npm run db:deploy` |
 | 실행 (파일이 바뀌면 다시 시작) | `npm run start:dev` |
+| 개발용 토큰 받기 (같은 사용자: `-- --user <id>`) | `npm run dev:token` |
 | 빌드 / 빌드 결과 실행 | `npm run build` / `npm run start:prod` |
 | 단위 테스트 | `npm test` |
 | e2e 테스트 (DB 필요) | `npm run test:e2e` |
@@ -61,12 +79,17 @@ e2e 테스트는 같은 PostgreSQL 컨테이너 안의 테스트 DB(`.env`의 `T
 ## 폴더 구조
 
 ```
+.github/workflows/   CI (GitHub Actions)
 prisma/              DB 스키마와 마이그레이션
+scripts/             개발용 스크립트 (dev:token)
 src/
 ├─ main.ts           부트스트랩
-├─ app.setup.ts      전역 설정 (검증, /v1 버전, Swagger)
+├─ app.setup.ts      전역 설정 (검증, /v1 버전, 오류 변환, Swagger)
 ├─ config/           환경 변수 검사
 ├─ prisma/           DB 연결 (PrismaService)
-└─ <기능>/           기능 모듈 (module, controller, service, dto)
+├─ auth/             토큰 검사(전역 가드)
+├─ common/           기능끼리 같이 쓰는 코드 (날짜·시각, ID 검사, 오류 변환)
+├─ trips/            여행·장소·구간 API (동선 규칙은 route.ts)
+└─ health/           상태 확인
 test/                e2e 테스트와 테스트 DB 준비
 ```
