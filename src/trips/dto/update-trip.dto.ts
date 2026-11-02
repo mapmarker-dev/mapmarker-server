@@ -12,10 +12,10 @@ import {
   ValidateNested,
 } from 'class-validator';
 import { CanOmit } from '../../common/can-omit.decorator';
+import { NOT_BLANK } from '../../common/text';
 import { MapProvider, Season, TripPhase } from '../../generated/prisma/enums';
 import {
   MAX_NIGHTS,
-  NOT_BLANK,
   REGION_MAX_LENGTH,
   TITLE_MAX_LENGTH,
 } from './create-trip.dto';

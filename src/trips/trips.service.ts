@@ -7,13 +7,11 @@ import { parseLocalDate } from '../common/local-date';
 import { Prisma } from '../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateTripDto } from './dto/create-trip.dto';
-import {
-  toTripDetailResponse,
-  TripDetailResponse,
-} from './dto/trip-detail-response.dto';
+import { TripDetailResponse } from './dto/trip-detail-response.dto';
 import { toTripResponse, TripResponse } from './dto/trip-response.dto';
 import { UpdateTripDto } from './dto/update-trip.dto';
 import { checkTripDates, TripDates } from './trip-dates';
+import { readTripDetail } from './trip-detail';
 import { lockOwnedTrip } from './trip-lock';
 
 /**
@@ -54,16 +52,9 @@ export class TripsService {
   }
 
   async get(userId: string, tripId: string): Promise<TripDetailResponse> {
-    const trip = await this.prisma.trip.findFirst({
-      where: { id: tripId, userId },
-      include: {
-        stops: { orderBy: [{ day: 'asc' }, { order: 'asc' }] },
-        segments: true,
-      },
-    });
-    if (!trip) throw new NotFoundException();
-    const { stops, segments, ...fields } = trip;
-    return toTripDetailResponse(fields, stops, segments);
+    const detail = await readTripDetail(this.prisma, { id: tripId, userId });
+    if (!detail) throw new NotFoundException();
+    return detail;
   }
 
   /**

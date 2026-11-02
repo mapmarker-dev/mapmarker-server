@@ -4,7 +4,7 @@
 // 규칙
 // - 테이블·칼럼은 snake_case(@map), Prisma 필드와 API는 앱 모델(mapmarker-app/lib/data/models/)과 같은 camelCase.
 // - 시각은 모두 timestamptz(3). Prisma 기본 DateTime은 시간대 없는 timestamp라서 직접 적는다.
-// - Trip·Stop·Segment·Photo의 ID는 앱이 만든 UUID v7을 그대로 받는다(기본값 없음). User만 서버가 만든다.
+// - Trip·Stop·Photo의 ID는 앱이 만든 UUID v7을 그대로 받는다(기본값 없음). User·Segment만 서버가 만든다.
 // - Prisma가 표현하지 못하는 제약(CHECK, 미룰 수 있는 유일 제약)은 마이그레이션 SQL에 직접 넣었다.
 //   prisma/migrations/*_init/migration.sql 끝부분 참고.
 
@@ -148,8 +148,9 @@ model Stop {
 
 /// 구간. 이웃한 두 장소 사이에만 있고, 장소마다 나가는 구간과 들어오는 구간이 하나씩이다(동선은 한 줄).
 /// 장소가 지워지면 그 장소의 구간도 지워진다. 새 이웃을 잇는 구간은 서비스가 같은 트랜잭션에서 만든다.
+/// 구간은 장소 순서에서 따라 나오므로 ID도 서버가 만든다(Prisma가 만드는 값이라 DB 기본값은 없다).
 model Segment {
-  id         String      @id @db.Uuid
+  id         String      @id @default(uuid(7)) @db.Uuid
   tripId     String      @map("trip_id") @db.Uuid
   fromStopId String      @unique @map("from_stop_id") @db.Uuid
   toStopId   String      @unique @map("to_stop_id") @db.Uuid

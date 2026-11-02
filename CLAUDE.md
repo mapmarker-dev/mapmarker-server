@@ -81,6 +81,7 @@ test/
 - PATCH DTO에서 null로 지울 수 없는 필드는 `@CanOmit()`, null로 지우는 필드는 `@IsOptional()`을 쓴다. `@IsOptional()`은 null도 건너뛰어서 null이 DB까지 가면 500이 난다.
 - **남의 자원은 404로 숨긴다.** 쿼리를 사용자 ID로 걸러(`where: { id, userId }`) "없음"과 "남의 것"이 똑같이 보이게 한다. 403은 쓰지 않는다.
 - 여행의 동선 규칙(기간, 장소 순서)을 확인하고 바꾸는 요청은 트랜잭션 안에서 `lockOwnedTrip(tx, userId, tripId)`로 여행 줄부터 잠근다(소유자 확인 겸, 404).
+- 동선 규칙(순서 다시 매기기, 이웃 사이 구간)은 `trips/route.ts`의 순수 함수에만 둔다. 앱의 `route_links.dart`와 같은 규칙이라, 한쪽을 바꾸면 다른 쪽과 테스트 사례도 같이 바꾼다. 서비스는 계산한 결과를 DB에 반영만 하고(`StopsService`의 `applyRoute`), 동선이 바뀌는 요청은 `{ trip, stops, segments }` 전체를 돌려준다.
 - 오류: 400 입력, 401 토큰, 404 없음·남의 것, 409 중복 ID·상태 충돌. 예상하는 경우는 서비스가 먼저 확인하고, 전역 `PrismaExceptionFilter`는 남은 P2002 → 409, P2025 → 404만 바꾼다. 다른 DB 오류는 서비스가 놓친 버그라 500으로 둔다.
 - 테스트용 UUID v7은 `test/setup/ids.ts`의 `uuidv7()`로 만든다.
 
@@ -98,7 +99,7 @@ test/
 - 스키마를 바꾸면 `npm run db:migrate -- --name <이름>`으로 마이그레이션을 만들고, 만든 SQL을 확인해 함께 커밋한다. 적용된 마이그레이션 파일은 고치지 않는다.
 - Prisma가 표현하지 못하는 제약(CHECK, 미룰 수 있는 유일 제약)은 `npm run db:migrate -- --create-only --name <이름>`으로 SQL만 만든 뒤 손으로 넣고 적용한다. 적용한 뒤 `npx prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma`가 "No difference detected"인지 확인한다.
 - 테이블·칼럼은 snake_case(`@map`), 필드는 앱 모델과 같은 camelCase. 시각 칼럼은 `@db.Timestamptz(3)`를 붙인다(Prisma 기본은 시간대 없는 timestamp).
-- 앱이 만든 ID(Trip·Stop·Segment·Photo)에는 기본값을 두지 않는다. 서버가 만드는 ID만 `@default(uuid(7))`.
+- 앱이 만든 ID(Trip·Stop·Photo)에는 기본값을 두지 않는다. 서버가 만드는 ID(User·Segment)만 `@default(uuid(7))`. 구간은 장소 순서에서 따라 나와서 서버가 만든다. `uuid(7)`은 Prisma가 값을 만들어서 DB 기본값(마이그레이션)은 없다.
 - DB 연결은 드라이버 어댑터(`@prisma/adapter-pg`)로 한다(`PrismaService`).
 - 스키마 제약은 `test/schema.e2e-spec.ts`에서 실제 DB로 확인한다. 제약을 더하면 여기에 막는 경우와 통과하는 경우를 더한다.
 

@@ -12,6 +12,7 @@ import {
   ValidateNested,
 } from 'class-validator';
 import { IsAppId } from '../../common/app-id';
+import { NOT_BLANK } from '../../common/text';
 import { MapProvider, Season, TripPhase } from '../../generated/prisma/enums';
 import { TripDatesDto } from './trip-dates.dto';
 
@@ -19,9 +20,6 @@ import { TripDatesDto } from './trip-dates.dto';
 export const TITLE_MAX_LENGTH = 100;
 export const REGION_MAX_LENGTH = 50;
 export const MAX_NIGHTS = 365;
-
-/** 빈칸만 있는 글자는 받지 않는다. */
-export const NOT_BLANK = /\S/;
 
 /**
  * 여행 만들기. ID는 앱이 만든 UUID v7이다.
