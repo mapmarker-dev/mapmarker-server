@@ -16,6 +16,7 @@ import { UpdateStopDto } from './dto/update-stop.dto';
 import { diffSegments, placeStop, removeStop, RouteStop } from './route';
 import { readTripDetail } from './trip-detail';
 import { lockOwnedTrip } from './trip-lock';
+import { touchTrip } from './trip-touch';
 
 type Tx = Prisma.TransactionClient;
 
@@ -231,12 +232,4 @@ async function applyRoute(
 
   await touchTrip(tx, tripId);
   return (await readTripDetail(tx, { id: tripId }))!;
-}
-
-/** 장소·구간이 바뀌면 여행도 고친 것으로 본다. 여행 목록이 최근에 고친 순서라서다. */
-async function touchTrip(tx: Tx, tripId: string): Promise<void> {
-  await tx.trip.update({
-    where: { id: tripId },
-    data: { updatedAt: new Date() },
-  });
 }
