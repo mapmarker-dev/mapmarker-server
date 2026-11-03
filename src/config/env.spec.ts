@@ -7,6 +7,7 @@ describe('validateEnv', () => {
   const required = {
     DATABASE_URL: databaseUrl,
     JWT_ACCESS_SECRET: jwtSecret,
+    KAKAO_NATIVE_APP_KEY: 'kakao-app-key',
   };
 
   it('빠진 값은 기본값을 쓰고, 문자열 포트는 숫자로 바꾼다', () => {
@@ -38,6 +39,15 @@ describe('validateEnv', () => {
     expect(() =>
       validateEnv({ ...required, JWT_ACCESS_SECRET: 'a'.repeat(31) }),
     ).toThrow('JWT_ACCESS_SECRET');
+  });
+
+  it('KAKAO_NATIVE_APP_KEY가 없거나 비어 있으면 서버를 띄우지 않는다', () => {
+    const { KAKAO_NATIVE_APP_KEY: _, ...withoutKakao } = required;
+
+    expect(() => validateEnv(withoutKakao)).toThrow('KAKAO_NATIVE_APP_KEY');
+    expect(() =>
+      validateEnv({ ...required, KAKAO_NATIVE_APP_KEY: '' }),
+    ).toThrow('KAKAO_NATIVE_APP_KEY');
   });
 
   it('모르는 NODE_ENV와 범위 밖 포트를 거절한다', () => {

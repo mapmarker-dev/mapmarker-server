@@ -7,8 +7,15 @@ import { jwtModuleOptions } from './access-token';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { JwtAuthGuard } from './jwt-auth.guard';
+import { SessionsService } from './sessions.service';
+import { SocialLoginService } from './social-login.service';
+import { KakaoTokenVerifier } from './social/kakao-token.verifier';
+import { NaverTokenVerifier } from './social/naver-token.verifier';
 
-/** access 토큰 서명·검사와 전역 가드. 경로를 열려면 `@Public()`을 붙인다. */
+/**
+ * 소셜 로그인, access 토큰 서명·검사, 로그인 세션(refresh 토큰), 전역 가드. 경로를 열려면 `@Public()`을 붙인다.
+ * e2e는 제공자 검증기를 `overrideProvider`로 가짜로 바꿔서 실제 카카오·네이버에 붙지 않는다.
+ */
 @Module({
   imports: [
     JwtModule.registerAsync({
@@ -18,7 +25,14 @@ import { JwtAuthGuard } from './jwt-auth.guard';
     }),
   ],
   controllers: [AuthController],
-  providers: [AuthService, { provide: APP_GUARD, useClass: JwtAuthGuard }],
-  exports: [AuthService],
+  providers: [
+    AuthService,
+    SessionsService,
+    SocialLoginService,
+    KakaoTokenVerifier,
+    NaverTokenVerifier,
+    { provide: APP_GUARD, useClass: JwtAuthGuard },
+  ],
+  exports: [AuthService, SessionsService],
 })
 export class AuthModule {}

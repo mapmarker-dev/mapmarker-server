@@ -72,6 +72,16 @@ describe('AuthService', () => {
     );
   });
 
+  it('access 토큰의 만료 시각은 토큰의 exp(발급 15분 뒤)와 같다', async () => {
+    const { token, expiresAt } = await serviceWith().createAccessToken(userId);
+    const payload = new JwtService().decode<{ iat: number; exp: number }>(
+      token,
+    );
+
+    expect(expiresAt.getTime()).toBe(payload.exp * 1000);
+    expect(payload.exp - payload.iat).toBe(15 * 60);
+  });
+
   it('서명이 없는 alg: none 토큰은 401', async () => {
     const now = Math.floor(Date.now() / 1000);
     const token = [

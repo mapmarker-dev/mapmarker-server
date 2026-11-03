@@ -17,6 +17,7 @@ MapMarker의 API 서버. NestJS 12 + Prisma 7 + PostgreSQL 18, Node 24, npm. 원
 - 값은 `.env`(커밋하지 않음), 항목 목록은 `.env.example`. 변수를 더하면 `.env.example`과 `src/config/env.ts`의 `Env`도 고친다.
 - 서버 코드는 `ConfigService<Env, true>`로만 읽는다(`process.env` 금지). 시작할 때 `Env`로 검사해서 틀리면 서버가 뜨지 않는다. `scripts/`는 서버 코드가 아니라 `dotenv` + 같은 `validateEnv`로 읽는다. Prisma CLI는 `prisma.config.ts`가 `.env`를 읽는다.
 - `JWT_ACCESS_SECRET`(32자 이상): 로컬은 직접 만든 무작위 값(명령은 `.env.example`), e2e는 `test/setup/env.ts`의 테스트 전용 값(그래서 CI 워크플로에 없다), 운영은 1-7단계에서 AWS SSM·Secrets Manager.
+- `KAKAO_NATIVE_APP_KEY`: 카카오 id_token의 `aud`와 비교하는 네이티브 앱 키. 앱에도 들어가는 값이라 비밀은 아니다. 로컬은 카카오 앱 등록 전에는 아무 값(카카오 로그인만 401), e2e는 `test/setup/env.ts`의 테스트 값, 운영은 1-7단계에서 다른 값과 함께 둔다. 네이버는 서버에 둘 값이 없다.
 - e2e는 `TEST_DATABASE_URL`의 DB를 매번 지우고 다시 만든다. 이름이 `_test`로 끝나야 한다.
 
 ## CI
@@ -43,12 +44,12 @@ src/
 ├─ app.setup.ts            configureApp: ValidationPipe, /v1, Prisma 오류 필터, Swagger
 ├─ config/                 환경 변수 검사(Env)
 ├─ prisma/                 PrismaModule(전역), PrismaService
-├─ auth/                   토큰 서명·검사, 전역 가드, @Public, @CurrentUser
+├─ auth/                   소셜 로그인, 토큰·세션, 전역 가드, @Public, @CurrentUser. 제공자 검증기는 social/
 ├─ common/                 같이 쓰는 코드: Prisma 오류 필터, 날짜·시각, 앱 ID 검사, @CanOmit
 ├─ trips/                  여행·장소·구간 API. 동선 규칙은 route.ts
 ├─ health/                 상태 확인
 └─ generated/prisma/       Prisma Client 생성물(커밋하지 않음)
-test/                      *.e2e-spec.ts, setup/(테스트 DB, 환경 변수, 토큰·ID 도우미)
+test/                      *.e2e-spec.ts, setup/(테스트 DB, 환경 변수, 토큰·ID·가짜 제공자·서명 키 도우미)
 ```
 
 - 기능 폴더는 `xxx.module.ts`·`xxx.controller.ts`·`xxx.service.ts`·`dto/`, 단위 테스트(`*.spec.ts`)는 같은 폴더. 컨트롤러는 요청·응답만, 규칙과 DB 접근은 서비스.
@@ -61,7 +62,7 @@ test/                      *.e2e-spec.ts, setup/(테스트 DB, 환경 변수, �
 - 앱이 만든 ID(UUID v7)는 `common/app-id.ts`로 받는다: 본문 `@IsAppId()`, 경로 `AppIdParam(name)` + `@ApiAppIdParam(name)`, 응답 `@ApiIdProperty()`. Swagger 기본 예시(v4)를 v7로 바꿔 준다. 테스트는 `test/setup/ids.ts`의 `uuidv7()`.
 - PATCH에서 null로 지울 수 없는 필드는 `@CanOmit()`, 지우는 필드는 `@IsOptional()`(null도 건너뛰어서 DB까지 가면 500).
 - **남의 자원은 404로 숨긴다**(`where: { id, userId }`). 403은 쓰지 않는다.
-- 오류: 400 입력, 401 토큰, 404 없음·남의 것, 409 중복 ID·상태 충돌. 예상하는 경우는 서비스가 먼저 확인하고, 전역 `PrismaExceptionFilter`는 남은 P2002 → 409, P2025 → 404만 바꾼다. 나머지 DB 오류는 서비스가 놓친 버그라 500.
+- 오류: 400 입력, 401 토큰, 404 없음·남의 것, 409 중복 ID·상태 충돌, 503 외부 서비스(카카오·네이버)에 닿지 못함. 예상하는 경우는 서비스가 먼저 확인하고, 전역 `PrismaExceptionFilter`는 남은 P2002 → 409, P2025 → 404만 바꾼다. 나머지 DB 오류는 서비스가 놓친 버그라 500.
 
 ## 동선(장소·구간)
 
@@ -73,19 +74,26 @@ test/                      *.e2e-spec.ts, setup/(테스트 DB, 환경 변수, �
 
 ## 인증
 
-- 모든 경로에 `JwtAuthGuard`(`APP_GUARD`)가 걸리고, 열 경로만 `@Public()`(지금 `/health`). `/docs`는 Nest 경로가 아니라 가드가 닿지 않는다.
+- 모든 경로에 `JwtAuthGuard`(`APP_GUARD`)가 걸리고, 열 경로만 `@Public()`(`/health`, `/v1/auth`의 로그인·재발급·로그아웃). `/docs`는 Nest 경로가 아니라 가드가 닿지 않는다.
 - 사용자는 `@CurrentUser() user: AuthUser`로 꺼낸다. `AuthUser`는 `import type`으로 불러온다(아니면 `isolatedModules` 때문에 단위 테스트는 통과하고 `npm run build`만 실패한다).
-- 보호된 컨트롤러에는 `@ApiBearerAuth()`, `@ApiUnauthorizedResponse()`.
+- 보호된 컨트롤러에는 `@ApiBearerAuth()`, `@ApiUnauthorizedResponse()`. `AuthController`처럼 열린 경로가 섞이면 메서드에 단다.
 - access 토큰: HS256, `sub`·`iat`·`exp`만, 15분(`auth/access-token.ts`). 가드는 서명·만료만 보고 DB는 안 본다. 틀린 이유는 숨기고 모두 401.
-- 아이디·비밀번호 로그인은 만들지 않는다. 운영의 토큰은 소셜 로그인으로만, 테스트는 `test/setup/auth.ts`의 `createUserWithToken(app)`.
+- 아이디·비밀번호 로그인은 만들지 않는다. 운영의 토큰은 소셜 로그인으로만 얻는다. 개발은 `npm run dev:token`.
+- **소셜 로그인**(`social-login.service.ts`): 제공자 토큰 검증 → `(provider, providerUserId)`로 사용자 찾기, 없으면 사용자와 소셜 계정을 중첩 create로 함께 만들기(동시 첫 로그인의 P2002는 다시 읽기) → `SessionsService.start`. 닉네임은 가입 때만 넣는다.
+- **제공자 검증기**(`auth/social/`, `SocialTokenVerifier`): 토큰이 틀리면 401, 제공자에 닿지 못하면 503(앱이 "다시 로그인"과 "잠시 후 다시"를 나눈다).
+  - 카카오: id_token을 `RemoteJwks`(카카오 공개키 캐시)로 RS256 서명·`iss`·`aud`(`KAKAO_NATIVE_APP_KEY`)·`exp` 검증. access 토큰용 `JwtService`와 섞지 않게 따로 만든 인스턴스를 쓴다.
+  - 네이버: access token으로 `GET https://openapi.naver.com/v1/nid/me`(5초). `024`·401이면 401.
+  - 제공자를 더할 때: 검증기 + `SocialProvider` enum(마이그레이션) + DTO·경로 + `SocialLoginService`의 `verifiers`. OIDC 제공자(Apple·구글)는 `RemoteJwks`를 다시 쓴다.
+- **refresh 토큰**(`refresh-token.ts`, `sessions.service.ts`): `<세션 ID>.<비밀>`, DB(`auth_sessions`)에는 비밀의 SHA-256만. 재발급은 "해시가 맞고 만료 전" 조건부 UPDATE 한 번으로 바꾸고(잠금 없이 동시 요청 중 하나만 성공), 바뀌지 않으면 세션을 지우고 401(예전 토큰 재사용 = 탈취 의심). 만료는 쓸 때마다 30일 뒤로. 로그아웃은 지금 토큰과 맞을 때만 지우고 항상 204.
+- **테스트**: 실제 카카오·네이버에 붙지 않는다. 단위는 `test/setup/signing-keys.ts`의 RSA 키로 서명하고 `jest.spyOn(globalThis, 'fetch')`. e2e는 `withFakeSocialProviders(builder)`(`test/setup/social.ts`, 토큰 `ok:<id>:<닉네임>`·`down`·그 밖), 로그인 없이 토큰이 필요하면 `createUserWithToken(app)`·`createUserWithSession(app)`(`test/setup/auth.ts`).
 
 ## Prisma
 
 - 7.10.x로 고정한다(`latest`가 8.0 RC). 올릴 때 버전을 정해 `prisma`·`@prisma/client`·`@prisma/adapter-pg`를 함께.
-- 스키마를 바꾸면 `npm run db:migrate -- --name <이름>`, 만든 SQL을 확인해 커밋한다. 적용된 마이그레이션은 고치지 않는다.
+- 스키마를 바꾸면 `npm run db:migrate -- --name <이름>`, 만든 SQL을 확인해 커밋한다. 적용된 마이그레이션은 고치지 않는다. Prisma 7의 `migrate dev`는 Client를 다시 만들지 않으니 `npm run prisma:generate`도 돌린다(안 하면 새 모델이 `undefined`).
 - Prisma가 못 쓰는 제약(CHECK, 미룰 수 있는 유일 제약)은 `-- --create-only`로 SQL만 만들어 손으로 넣는다. 적용 뒤 `npx prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma`가 "No difference detected"인지 본다.
 - 테이블·칼럼은 snake_case(`@map`), 시각 칼럼은 `@db.Timestamptz(3)`.
-- 앱이 만든 ID(Trip·Stop·Photo)는 기본값 없음. 서버가 만드는 ID(User·Segment)만 `@default(uuid(7))`(Prisma가 만드는 값이라 마이그레이션은 없다).
+- 앱이 만든 ID(Trip·Stop·Photo)는 기본값 없음. 서버가 만드는 ID(User·Segment·SocialAccount·AuthSession)만 `@default(uuid(7))`(Prisma가 만드는 값이라 마이그레이션은 없다).
 - 연결은 드라이버 어댑터(`@prisma/adapter-pg`, `PrismaService`).
 - 스키마 제약은 `test/schema.e2e-spec.ts`에서 실제 DB로 확인한다. 제약을 더하면 막는 경우와 통과하는 경우를 더한다.
 

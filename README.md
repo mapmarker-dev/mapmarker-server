@@ -4,12 +4,13 @@
 
 ## 지금 상태
 
-1-1단계(서버 기본)를 진행하고 있습니다.
+1-1단계(서버 기본)를 마쳤습니다.
 
 - DB 스키마(User, Trip, Stop, Segment, Photo)와 CI(GitHub Actions: lint, 형식, 단위, 빌드, e2e)
-- 서버가 발급한 access 토큰(JWT)을 검사하는 인증. 모든 API에 걸려 있고 `/health`만 열려 있습니다
+- 카카오·네이버 소셜 로그인(`/v1/auth/login/kakao`, `/v1/auth/login/naver`). 앱이 SDK로 받은 토큰을 서버가 검증하고, 서버의 access 토큰(15분)과 refresh 토큰(30일, 쓸 때마다 교체)을 줍니다. 재발급 `/v1/auth/refresh`, 로그아웃 `/v1/auth/logout`
+- access 토큰(JWT)을 검사하는 인증. 모든 API에 걸려 있고 로그인·재발급·로그아웃과 `/health`만 열려 있습니다
 - 여행·장소·구간 API(`/v1/trips`, `/v1/stops`, `/v1/segments`). 장소를 넣고 옮기고 지우면 서버가 이웃한 장소 사이 구간을 앱과 같은 규칙으로 다시 잇습니다
-- 다음은 카카오·네이버 로그인입니다. 그전까지 로컬에서는 `npm run dev:token`으로 토큰을 받습니다
+- 다음은 앱의 서버 연동과 사진 업로드(S3)입니다
 
 단계별 계획은 [PLAN](https://github.com/mapmarker-dev/.github/blob/main/docs/PLAN.md)에 있습니다.
 
@@ -41,6 +42,8 @@ cp .env.example .env
 node -e "console.log(require('node:crypto').randomBytes(32).toString('base64url'))"
 ```
 
+- 카카오 앱 키: `KAKAO_NATIVE_APP_KEY`에 카카오 개발자 콘솔의 네이티브 앱 키를 넣습니다. 앱 등록 전에는 아무 값이나 넣어도 서버는 뜹니다(카카오 로그인만 401). 네이버는 서버에 넣을 값이 없습니다.
+
 의존성을 받고(Prisma Client도 이때 만들어집니다), DB를 켜고, 마이그레이션을 적용한 뒤 실행합니다.
 
 ```bash
@@ -54,7 +57,7 @@ npm run start:dev
 - 상태 확인: http://localhost:3000/health
 - API 문서(Swagger): http://localhost:3000/docs
 
-API를 부르려면 토큰이 필요합니다. 로그인이 생기기 전까지는 개발용 토큰을 받아서 Swagger 오른쪽 위 **Authorize**에 토큰만(`Bearer` 없이) 넣습니다. 개발 DB에 사용자를 하나 만들고 24시간짜리 토큰을 출력합니다.
+API를 부르려면 토큰이 필요합니다. 실제 로그인은 카카오·네이버 토큰이 있어야 해서, 로컬에서는 개발용 토큰을 받아 Swagger 오른쪽 위 **Authorize**에 토큰만(`Bearer` 없이) 넣습니다. 개발 DB에 사용자를 하나 만들고 24시간짜리 토큰을 출력합니다.
 
 ```bash
 npm run dev:token

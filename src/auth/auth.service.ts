@@ -4,7 +4,7 @@ import { isUUID } from 'class-validator';
 import { PrismaService } from '../prisma/prisma.service';
 import { AccessTokenPayload } from './access-token';
 import { AuthUser } from './auth-user';
-import { MeResponse } from './dto/me-response.dto';
+import { MeResponse, toMeResponse } from './dto/me-response.dto';
 
 @Injectable()
 export class AuthService {
@@ -17,6 +17,15 @@ export class AuthService {
   signAccessToken(userId: string): Promise<string> {
     const payload: AccessTokenPayload = { sub: userId };
     return this.jwt.signAsync(payload);
+  }
+
+  /** access 토큰과 만료 시각. 만료 시각은 서명한 토큰의 exp에서 읽어서 토큰과 어긋나지 않는다. */
+  async createAccessToken(
+    userId: string,
+  ): Promise<{ token: string; expiresAt: Date }> {
+    const token = await this.signAccessToken(userId);
+    const { exp } = this.jwt.decode<{ exp: number }>(token);
+    return { token, expiresAt: new Date(exp * 1000) };
   }
 
   /**
@@ -41,6 +50,6 @@ export class AuthService {
   async getMe(userId: string): Promise<MeResponse> {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     if (!user) throw new UnauthorizedException();
-    return { id: user.id, createdAt: user.createdAt.toISOString() };
+    return toMeResponse(user);
   }
 }

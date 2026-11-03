@@ -51,6 +51,7 @@ describe('인증 (e2e)', () => {
 
     expect(response.body).toEqual({
       id: userId,
+      nickname: null,
       createdAt: expect.any(String),
     });
   });
