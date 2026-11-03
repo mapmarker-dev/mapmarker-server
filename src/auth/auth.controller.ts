@@ -11,6 +11,7 @@ import {
   ApiBearerAuth,
   ApiNoContentResponse,
   ApiOkResponse,
+  ApiServiceUnavailableResponse,
   ApiTags,
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
@@ -18,14 +19,20 @@ import {
 import type { AuthUser } from './auth-user';
 import { AuthService } from './auth.service';
 import { CurrentUser } from './current-user.decorator';
+import { LoginResponse } from './dto/login-response.dto';
 import { MeResponse } from './dto/me-response.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
+import { KakaoLoginDto, NaverLoginDto } from './dto/social-login.dto';
 import { TokenPairResponse } from './dto/token-pair-response.dto';
 import { Public } from './public.decorator';
 import { SessionsService } from './sessions.service';
+import { SocialLoginService } from './social-login.service';
+
+const PROVIDER_UNAVAILABLE =
+  '제공자(카카오·네이버)에 닿지 못함. 토큰은 버리지 말고 잠시 후 다시 시도한다';
 
 /**
- * 인증. 재발급·로그아웃은 access 토큰이 만료된 뒤에도 불러야 해서 열어 두고 refresh 토큰으로 확인한다.
+ * 인증. 로그인·재발급·로그아웃은 access 토큰 없이(또는 만료된 뒤에) 불러야 해서 열어 둔다.
  * 그래서 `@ApiBearerAuth()`는 컨트롤러가 아니라 보호된 메서드에 단다.
  */
 @ApiTags('auth')
@@ -34,7 +41,36 @@ export class AuthController {
   constructor(
     private readonly authService: AuthService,
     private readonly sessions: SessionsService,
+    private readonly socialLogin: SocialLoginService,
   ) {}
+
+  /** 카카오 로그인. 처음이면 계정을 만든다. 기기마다 로그인 세션이 하나씩 생긴다. */
+  @Public()
+  @Post('login/kakao')
+  @HttpCode(HttpStatus.OK)
+  @ApiOkResponse({ type: LoginResponse })
+  @ApiBadRequestResponse({ description: '본문이 틀림' })
+  @ApiUnauthorizedResponse({
+    description: '카카오가 우리 앱에 발급한 id_token이 아니거나 만료됨',
+  })
+  @ApiServiceUnavailableResponse({ description: PROVIDER_UNAVAILABLE })
+  loginWithKakao(@Body() dto: KakaoLoginDto): Promise<LoginResponse> {
+    return this.socialLogin.login('kakao', dto.idToken);
+  }
+
+  /** 네이버 로그인. 처음이면 계정을 만든다. 기기마다 로그인 세션이 하나씩 생긴다. */
+  @Public()
+  @Post('login/naver')
+  @HttpCode(HttpStatus.OK)
+  @ApiOkResponse({ type: LoginResponse })
+  @ApiBadRequestResponse({ description: '본문이 틀림' })
+  @ApiUnauthorizedResponse({
+    description: '네이버가 거절한 access token(틀림, 만료)',
+  })
+  @ApiServiceUnavailableResponse({ description: PROVIDER_UNAVAILABLE })
+  loginWithNaver(@Body() dto: NaverLoginDto): Promise<LoginResponse> {
+    return this.socialLogin.login('naver', dto.accessToken);
+  }
 
   /** 토큰의 사용자. 앱이 저장한 토큰이 아직 쓸 수 있는지 확인하는 데도 쓴다. */
   @Get('me')

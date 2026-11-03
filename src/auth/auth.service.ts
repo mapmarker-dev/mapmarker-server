@@ -4,7 +4,7 @@ import { isUUID } from 'class-validator';
 import { PrismaService } from '../prisma/prisma.service';
 import { AccessTokenPayload } from './access-token';
 import { AuthUser } from './auth-user';
-import { MeResponse } from './dto/me-response.dto';
+import { MeResponse, toMeResponse } from './dto/me-response.dto';
 
 @Injectable()
 export class AuthService {
@@ -50,6 +50,6 @@ export class AuthService {
   async getMe(userId: string): Promise<MeResponse> {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     if (!user) throw new UnauthorizedException();
-    return { id: user.id, createdAt: user.createdAt.toISOString() };
+    return toMeResponse(user);
   }
 }
