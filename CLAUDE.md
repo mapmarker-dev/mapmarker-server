@@ -17,6 +17,7 @@ MapMarker의 API 서버. NestJS 12 + Prisma 7 + PostgreSQL 18, Node 24, npm. 원
 - 값은 `.env`(커밋하지 않음), 항목 목록은 `.env.example`. 변수를 더하면 `.env.example`과 `src/config/env.ts`의 `Env`도 고친다.
 - 서버 코드는 `ConfigService<Env, true>`로만 읽는다(`process.env` 금지). 시작할 때 `Env`로 검사해서 틀리면 서버가 뜨지 않는다. `scripts/`는 서버 코드가 아니라 `dotenv` + 같은 `validateEnv`로 읽는다. Prisma CLI는 `prisma.config.ts`가 `.env`를 읽는다.
 - `JWT_ACCESS_SECRET`(32자 이상): 로컬은 직접 만든 무작위 값(명령은 `.env.example`), e2e는 `test/setup/env.ts`의 테스트 전용 값(그래서 CI 워크플로에 없다), 운영은 1-7단계에서 AWS SSM·Secrets Manager.
+- `KAKAO_NATIVE_APP_KEY`: 카카오 id_token의 `aud`와 비교하는 네이티브 앱 키. 앱에도 들어가는 값이라 비밀은 아니다. 로컬은 카카오 앱 등록 전에는 아무 값(카카오 로그인만 401), e2e는 `test/setup/env.ts`의 테스트 값, 운영은 1-7단계에서 다른 값과 함께 둔다. 네이버는 서버에 둘 값이 없다.
 - e2e는 `TEST_DATABASE_URL`의 DB를 매번 지우고 다시 만든다. 이름이 `_test`로 끝나야 한다.
 
 ## CI

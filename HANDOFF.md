@@ -7,19 +7,21 @@
 1-1단계 서버 기본의 마지막 단위 **카카오·네이버 로그인**을 구현한다. 스키마·CI·자체 JWT 인증·Trip/Stop/Segment CRUD는 PR #2, #3으로 `main`에 병합했고, `dev`를 `main`에 맞췄다(fast-forward). 커밋 4개로 나눈다.
 
 1. 스키마: `SocialAccount`, `AuthSession`, `User.nickname` (커밋함)
-2. refresh 세션: 발급·교체·폐기, `POST /v1/auth/refresh`, `/logout` ← **마쳤다(커밋 전)**
-3. 제공자 검증기: JWKS 캐시, 카카오 id_token, 네이버 프로필 API, `KAKAO_NATIVE_APP_KEY`
+2. refresh 세션: 발급·교체·폐기, `POST /v1/auth/refresh`, `/logout` (커밋함)
+3. 제공자 검증기: JWKS 캐시, 카카오 id_token, 네이버 프로필 API, `KAKAO_NATIVE_APP_KEY` ← **마쳤다(커밋 전)**. 아직 어느 모듈에도 등록하지 않았다(4단계에서)
 4. 로그인 경로 `POST /v1/auth/login/kakao`·`/naver`, 가짜 제공자 e2e, 문서(서버 CLAUDE.md 인증 절, `.github` PLAN·OVERVIEW·HANDOFF) → `dev` push CI → `dev → main` PR
 
 ## 다음에 할 첫 단계
 
-사용자가 2단계를 커밋하면 3단계(제공자 검증기)를 시작한다. 로그인 경로(4단계)는 `SessionsService.start(userId)`로 토큰 쌍을 받는다.
+사용자가 3단계를 커밋하면 4단계(로그인 경로)를 시작한다. `src/auth/social/`의 검증기 두 개를 `AuthModule`에 등록하고, `SocialTokenVerifier.verify()` → 소셜 계정 찾기·만들기 → `SessionsService.start(userId)`로 토큰 쌍을 준다. e2e는 `overrideProvider`로 가짜 검증기를 끼운다.
 
 ## 아직 문서에 없는 결정 (4단계에서 OVERVIEW·CLAUDE.md로 옮긴다)
 
 - **카카오:** 앱이 **id_token**(콘솔에서 OIDC 켜기)을 보낸다. 서버는 `https://kauth.kakao.com/.well-known/jwks.json` 공개키로 RS256 서명, `iss=https://kauth.kakao.com`, `aud=네이티브 앱 키`, `exp`를 본다. 로그인마다 카카오를 부르지 않고, Apple·구글도 같은 방식이라 검증 코드를 다시 쓴다. nonce는 MVP에서 뺀다(Apple 때 다시 본다).
 - **네이버:** 앱이 **access token**을 보낸다(`flutter_naver_login` 2.1.1은 id_token을 주지 않는다). 서버는 `GET https://openapi.naver.com/v1/nid/me`를 불러 `resultcode "00"`의 `response.id`를 쓴다. `aud`는 없지만 네이버 사용자 ID가 앱마다 달라서 다른 앱의 토큰으로 기존 계정에 닿지 못한다. 서버에 네이버 값은 필요 없다.
-- **JWKS:** 새 의존성 없이 직접 만든다(1시간 캐시, 모르는 `kid`면 1분에 최대 한 번 다시 받기, 서명은 `JwtService`에 RS256만). `jose` 6은 ESM 전용이라 CJS + Jest와 안 맞는다.
+- **JWKS:** 새 의존성 없이 `auth/social/remote-jwks.ts`로 직접 만들었다(1시간 캐시, 모르는 `kid`면 1분에 최대 한 번 다시 받기, 다시 받기에 실패하면 예전 키를 계속 씀). 서명 검증은 access 토큰과 섞이지 않게 따로 만든 `JwtService`에 PEM과 RS256만 준다. `jose` 6은 ESM 전용이라 CJS + Jest와 안 맞는다.
+- **닉네임:** 앞뒤 공백을 떼고 30자(코드 포인트, 이모지를 가르지 않음)로 자른다. 비면 null.
+- **테스트 키:** 단위 테스트는 `test/setup/signing-keys.ts`로 RSA 키를 만들어 카카오 대신 서명하고, `fetch`는 `jest.spyOn(globalThis, 'fetch')`로 바꾼다. 이 도우미는 `src/` 밖이라 빌드에 안 들어간다.
 - **오류:** 소셜 토큰·refresh 토큰이 틀리면 401, 제공자에 닿지 못하면(5초 타임아웃, 5xx) 503. 409는 쓰지 않는다(첫 로그인이 동시에 오면 다시 읽어 200). 로그아웃은 모르는 토큰도 204.
 - **refresh 토큰:** `<세션 ID>.<무작위 32바이트 base64url>`, DB에는 비밀의 SHA-256만. 교체는 "비밀이 맞고 만료 전"을 조건으로 한 UPDATE 한 번이라(`updateManyAndReturn`) 잠금 없이도 같은 토큰이 동시에 오면 한쪽만 바뀐다. 쓸 때마다 만료를 30일 뒤로 민다. 로그아웃은 지금 토큰과 맞을 때만 지운다(예전 토큰으로는 안 지움). 세션 ID는 맞는데 비밀이 다르면 예전 토큰의 재사용(탈취)으로 보고 세션을 지운다. 로그인할 때 그 사용자의 만료된 세션을 치운다.
 - **계정·동의:** 카카오와 네이버로 따로 들어오면 다른 사용자다(자동 연결 없음, 이메일을 받지 않음). 받는 것은 닉네임(선택 동의, 가입 때만)뿐이고 제공자 토큰은 저장하지 않는다.
@@ -34,7 +36,7 @@
 
 ## 현재 상태
 
-- lint, 형식, 단위 59개, 빌드, e2e 163개(앱 4, 인증 6, 세션 19, 여행 37, 장소 44, 구간 15, 스키마 38) 로컬 통과(2026-11-02). `dev`·`main` CI는 1단계 전까지 초록.
+- lint, 형식, 단위 90개, 빌드, e2e 163개(앱 4, 인증 6, 세션 19, 여행 37, 장소 44, 구간 15, 스키마 38) 로컬 통과(2026-11-02). `dev`·`main` CI는 1단계 전까지 초록.
 - Prisma 7(어댑터) 오류 코드: 유일 위반 P2002, Restrict P2003, 대상 없음 P2025, CHECK 위반 P2039.
 - Windows Git Bash의 curl은 명령줄 한글을 UTF-8로 보내지 않아 깨진다(서버 문제 아님). 한글 요청은 Swagger로 확인한다.
 - 스키마 결정은 `prisma/schema.prisma` 주석, 손으로 넣은 제약은 `prisma/migrations/*/migration.sql` 끝, 큰 결정은 `.github` OVERVIEW에 있다.

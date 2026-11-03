@@ -37,6 +37,14 @@ export class Env {
   @IsString({ message: 'JWT_ACCESS_SECRET을 넣어 주세요' })
   @MinLength(32, { message: 'JWT_ACCESS_SECRET은 32자 이상이어야 합니다' })
   JWT_ACCESS_SECRET: string;
+
+  /**
+   * 카카오 네이티브 앱 키. 카카오 id_token의 aud(어느 앱을 위한 토큰인지)와 비교한다.
+   * 앱에도 들어가는 값이라 비밀은 아니지만, 개발·운영 카카오 앱이 다를 수 있어 환경마다 둔다.
+   */
+  @IsString({ message: 'KAKAO_NATIVE_APP_KEY를 넣어 주세요' })
+  @MinLength(1, { message: 'KAKAO_NATIVE_APP_KEY를 넣어 주세요' })
+  KAKAO_NATIVE_APP_KEY: string;
 }
 
 /** `ConfigModule`의 `validate`. 값은 환경 변수가 .env보다 우선한다. */
