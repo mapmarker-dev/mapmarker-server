@@ -19,6 +19,15 @@ export class AuthService {
     return this.jwt.signAsync(payload);
   }
 
+  /** access 토큰과 만료 시각. 만료 시각은 서명한 토큰의 exp에서 읽어서 토큰과 어긋나지 않는다. */
+  async createAccessToken(
+    userId: string,
+  ): Promise<{ token: string; expiresAt: Date }> {
+    const token = await this.signAccessToken(userId);
+    const { exp } = this.jwt.decode<{ exp: number }>(token);
+    return { token, expiresAt: new Date(exp * 1000) };
+  }
+
   /**
    * 서명과 만료를 확인하고 사용자를 돌려준다. DB는 보지 않는다.
    * 틀린 이유(서명, 만료, 모양)는 응답에 드러내지 않고 모두 401로 묶는다.

@@ -7,8 +7,9 @@ import { jwtModuleOptions } from './access-token';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { JwtAuthGuard } from './jwt-auth.guard';
+import { SessionsService } from './sessions.service';
 
-/** access 토큰 서명·검사와 전역 가드. 경로를 열려면 `@Public()`을 붙인다. */
+/** access 토큰 서명·검사, 로그인 세션(refresh 토큰), 전역 가드. 경로를 열려면 `@Public()`을 붙인다. */
 @Module({
   imports: [
     JwtModule.registerAsync({
@@ -18,7 +19,11 @@ import { JwtAuthGuard } from './jwt-auth.guard';
     }),
   ],
   controllers: [AuthController],
-  providers: [AuthService, { provide: APP_GUARD, useClass: JwtAuthGuard }],
-  exports: [AuthService],
+  providers: [
+    AuthService,
+    SessionsService,
+    { provide: APP_GUARD, useClass: JwtAuthGuard },
+  ],
+  exports: [AuthService, SessionsService],
 })
 export class AuthModule {}
