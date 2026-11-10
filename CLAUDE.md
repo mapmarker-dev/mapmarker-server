@@ -100,4 +100,4 @@ test/                      *.e2e-spec.ts, setup/(테스트 DB, 환경 변수, �
 ## 코딩 규칙
 
 - 커밋 전에 CI와 같은 `lint`, `format:check`, `test`, `build`, `test:e2e`가 통과하는지 본다.
-- 테스트 이름과 주석은 한국어(앱과 같음).
+- 테스트 이름과 주석은 한국어다.
