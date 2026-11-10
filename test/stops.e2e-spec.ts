@@ -482,6 +482,34 @@ describe('장소 API (e2e)', () => {
       expect(days(await detail())).toEqual(['1: A']);
     });
 
+    it('휴지통에 든 여행의 장소는 넣기·고치기·옮기기·지우기 모두 404', async () => {
+      const { A } = await addAll('A');
+      const auth = bearer(me.token);
+      await api()
+        .delete(`/v1/trips/${tripId}`)
+        .set('Authorization', auth)
+        .expect(204);
+
+      await postStop(stopBody('X')).expect(404);
+      await api()
+        .patch(`/v1/stops/${A}`)
+        .set('Authorization', auth)
+        .send({ name: 'x' })
+        .expect(404);
+      await api()
+        .put(`/v1/stops/${A}/position`)
+        .set('Authorization', auth)
+        .send({ day: 1, order: 0 })
+        .expect(404);
+      await api()
+        .delete(`/v1/stops/${A}`)
+        .set('Authorization', auth)
+        .expect(404);
+
+      const stops = await prisma.stop.findMany();
+      expect(stops.map((s) => s.name)).toEqual(['A']);
+    });
+
     it('UUID v7이 아닌 경로는 400', async () => {
       const response = await api()
         .patch(`/v1/stops/${randomUUID()}`)
