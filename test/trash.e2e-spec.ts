@@ -1,10 +1,12 @@
 import { INestApplication } from '@nestjs/common';
+import { CronExpression, SchedulerRegistry } from '@nestjs/schedule';
 import { Test } from '@nestjs/testing';
 import request from 'supertest';
 import { App } from 'supertest/types';
 import { AppModule } from '../src/app.module';
 import { configureApp } from '../src/app.setup';
 import { PrismaService } from '../src/prisma/prisma.service';
+import { TrashService } from '../src/trips/trash.service';
 import { bearer, createUserWithToken } from './setup/auth';
 import { truncateAll } from './setup/database';
 import { uuidv7 } from './setup/ids';
@@ -269,6 +271,69 @@ describe('휴지통 API (e2e)', () => {
       await trash(tripId);
 
       await removeForever(tripId).expect(409);
+    });
+  });
+
+  describe('예약 삭제', () => {
+    const now = new Date('2026-12-10T09:00:00.000Z');
+
+    async function stopCount(tripId: string) {
+      return prisma.stop.count({ where: { tripId } });
+    }
+
+    it('넣은 지 30일이 지난 여행을 장소·구간과 함께 지우고 지운 수를 돌려준다', async () => {
+      const ids: Record<string, string> = {};
+      for (const [name, deletedAt] of [
+        ['31일', new Date(now.getTime() - 31 * DAY_MS)],
+        ['딱 30일', new Date(now.getTime() - 30 * DAY_MS)],
+        ['29일', new Date(now.getTime() - 29 * DAY_MS)],
+      ] as const) {
+        ids[name] = await createTrip(name);
+        for (const stop of ['A', 'B']) {
+          await api()
+            .post(`/v1/trips/${ids[name]}/stops`)
+            .set('Authorization', bearer(me.token))
+            .send({
+              id: uuidv7(),
+              day: 1,
+              order: 9,
+              latitude: 35.1,
+              longitude: 129.1,
+              name: stop,
+            })
+            .expect(201);
+        }
+        await trash(ids[name]);
+        await setDeletedAt(ids[name], deletedAt);
+      }
+      const active = await createTrip('휴지통에 없는 여행');
+      // 오래 고치지 않은 여행도 휴지통에 없으면 지우지 않는다.
+      await prisma.$executeRaw`
+        UPDATE trips SET updated_at = ${new Date(now.getTime() - 400 * DAY_MS)}
+        WHERE id = ${active}::uuid`;
+
+      const purged = await app.get(TrashService).purgeExpired(now);
+
+      expect(purged).toBe(2);
+      const left = await prisma.trip.findMany({ select: { title: true } });
+      expect(left.map((t) => t.title).sort()).toEqual(
+        ['29일', '휴지통에 없는 여행'].sort(),
+      );
+      expect(await stopCount(ids['31일'])).toBe(0);
+      expect(await stopCount(ids['딱 30일'])).toBe(0);
+      expect(await stopCount(ids['29일'])).toBe(2);
+      expect(await prisma.segment.count()).toBe(1);
+    });
+
+    it('방금 넣은 여행만 있으면 지우지 않고 0', async () => {
+      await trash(await createTrip());
+      expect(await app.get(TrashService).purgeExpired()).toBe(0);
+      expect(await prisma.trip.count()).toBe(1);
+    });
+
+    it('한 시간마다 도는 작업으로 등록돼 있다', () => {
+      const job = app.get(SchedulerRegistry).getCronJob('trash-purge');
+      expect(job.cronTime.source).toBe(CronExpression.EVERY_HOUR);
     });
   });
 

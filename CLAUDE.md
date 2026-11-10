@@ -46,7 +46,7 @@ src/
 ├─ prisma/                 PrismaModule(전역), PrismaService
 ├─ auth/                   소셜 로그인, 토큰·세션, 전역 가드, @Public, @CurrentUser. 제공자 검증기는 social/
 ├─ common/                 같이 쓰는 코드: Prisma 오류 필터, 날짜·시각, 앱 ID 검사, @CanOmit
-├─ trips/                  여행·장소·구간 API. 동선 규칙은 route.ts
+├─ trips/                  여행·장소·구간·휴지통 API. 동선 규칙은 route.ts
 ├─ health/                 상태 확인
 └─ generated/prisma/       Prisma Client 생성물(커밋하지 않음)
 test/                      *.e2e-spec.ts, setup/(테스트 DB, 환경 변수, 토큰·ID·가짜 제공자·서명 키 도우미)
@@ -71,6 +71,14 @@ test/                      *.e2e-spec.ts, setup/(테스트 DB, 환경 변수, �
 - 구간은 장소 API가 만들고 지운다(ID는 서버가 만듦). 구간 API는 이동 수단·곡률·종류 고치기만 한다.
 - `legs`(jsonb)의 모양은 `TransportLegDto`가 검사한다. 상한(5토막, 정류장 99, 5999분)은 앱 `transport_draft.dart`와 같이 바꾼다.
 - 장소·구간을 바꾸면 `touchTrip`으로 여행 `updatedAt`도 바꾼다(여행 목록이 최근에 고친 순서).
+
+## 휴지통
+
+- `DELETE /v1/trips/:id`는 여행을 휴지통으로 옮긴다(`trips.deleted_at`). 휴지통의 여행은 `/v1/trash`(목록·되살리기·영구 삭제, `TrashService`) 말고는 없는 여행처럼 404다. 여행을 읽거나 고치는 쿼리를 새로 쓰면 `deletedAt: null`(SQL은 `deleted_at IS NULL`)로 거른다. 3단계 공유 링크 조회도 같다.
+- 휴지통으로 옮기기와 되살리기는 `updatedAt`을 바꾸지 않는다(되살리면 목록의 원래 자리). Prisma의 update·updateMany는 `@updatedAt`을 바꿔서 SQL로 쓴다.
+- 보관 기간(30일)은 `trips/trash-retention.ts`에만 둔다. 응답의 `purgeAt`으로 앱에 알리고, 보관 기간이 끝난 여행은 예약 삭제 전에도 휴지통 API에서 404다(`trashCutoff`).
+- 예약 삭제: `TrashService.purgeExpiredJob`이 한 시간마다(`@nestjs/schedule`, 이름 `trash-purge`) 보관 기간이 끝난 여행을 지운다. 여러 번 돌려도 결과가 같아서 서버가 여러 대여도 된다. 테스트는 `purgeExpired(now)`에 시각을 넘겨 본다.
+- 사진(1-3)이 생기면 영구 삭제와 예약 삭제가 사진과 S3 파일부터 지운다. 회원 탈퇴(1-6)는 휴지통을 거치지 않고 휴지통의 여행까지 바로 지운다.
 
 ## 인증
 

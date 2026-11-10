@@ -1,18 +1,15 @@
 # HANDOFF
 
-> 최종 갱신: 2026-11-10 · 브랜치: dev
+> 최종 갱신: 2026-11-11 · 브랜치: dev
 
 ## 지금 하는 일
 
-휴지통(PLAN 1-2 마지막 항목)을 서버·앱에 만드는 중이다. 서버 커밋 3개(휴지통으로 옮기기 → 휴지통 API → 예약 삭제) 뒤 앱(`../mapmarker-app/HANDOFF.md`)을 하고, 끝나면 서버 dev → main PR을 merge commit으로 합친다.
-
-- 정한 것(문서 반영은 마지막에 OVERVIEW·PLAN으로): 대상은 여행만, 회원 탈퇴는 휴지통 없이 바로 삭제, 보관 30일, `DELETE /v1/trips/:id`는 "휴지통으로 옮기기"(응답 204 그대로), 휴지통 API는 `GET /v1/trash`·`POST /v1/trash/:id/restore`·`DELETE /v1/trash/:id`(영구 삭제), 예약 삭제는 `@nestjs/schedule`로 한 시간마다. 공유 링크(3단계)는 휴지통 동안 막고 되살리면 다시 열린다(공유 ID는 지우지 않는다).
-- 완료: `trips.deleted_at`(마이그레이션 `trash`), 휴지통 여행은 목록·조회·고치기와 장소·구간 API 모두 404(`lockOwnedTrip`·`findOwned`·구간 `findFirst`가 거른다). 휴지통 API(`trips/trash.service.ts`·`trash.controller.ts`): 응답은 여행 + `deletedAt`·`purgeAt`, 되살리기는 여행(200)을 돌려준다. 옮기기와 되살리기는 `updatedAt`을 바꾸지 않으려고 SQL로 쓴다(되살리면 목록의 원래 자리). 보관 기간이 끝난 여행은 예약 삭제 전에도 휴지통 API에서 404다(`trips/trash-retention.ts`의 `trashCutoff`). 영구 삭제는 사진이 달린 장소가 있으면 409(예전 `DELETE /trips/:id`에서 옮김).
+휴지통(PLAN 1-2 마지막 항목)을 마쳤다(커밋 3개: 휴지통으로 옮기기 → 휴지통 API → 예약 삭제). 앱과 함께 실기기에서 지우기·되살리기·영구 삭제를 확인했다. 동작과 규칙은 `CLAUDE.md` "휴지통", 큰 결정은 `.github` OVERVIEW. dev → main PR을 merge commit으로 합치는 중이다.
 
 ## 다음에 할 첫 단계
 
-1. 예약 삭제(`@nestjs/schedule`, 한 시간마다 `TrashService.purgeExpired`)와 서버 `CLAUDE.md` "휴지통" 절.
-2. 그다음 1-3단계(사진 Presigned URL)다. AWS 계정(PLAN 0단계)을 먼저 만든다. 사진은 S3를 지우는 때가 "영구 삭제·예약 삭제"다.
+1. PR을 합친 뒤 다음 단위는 후보 장소(PLAN "1-2 후속": 장소와 따로 된 후보 테이블, CRUD, 동선에 넣기·후보로 빼기, 여행 조회 응답에 `candidates`)다. 설계 이유는 `.github` OVERVIEW "후보 장소".
+2. 그다음 1-3단계(사진 Presigned URL)다. AWS 계정(PLAN 0단계)을 먼저 만든다. 사진은 S3를 지우는 때가 "영구 삭제·예약 삭제"다(사진이 달린 여행은 지금 영구 삭제가 409, 예약 삭제는 그 시간 작업 전체가 실패한다).
 
 ## 다음 단위로 넘길 것
 
@@ -21,7 +18,7 @@
 
 ## 현재 상태
 
-- lint, 형식, 단위 93개, 빌드, e2e 194개(앱 4, 인증 6, 로그인 14, 세션 19, 여행 40, 장소 45, 구간 16, 휴지통 12, 스키마 38) 로컬 통과.
+- lint, 형식, 단위 96개, 빌드, e2e 197개(앱 4, 인증 6, 로그인 14, 세션 19, 여행 40, 장소 45, 구간 16, 휴지통 15, 스키마 38) 로컬 통과.
 - 카카오·네이버 로그인은 앱에서 실제 토큰으로 확인했다(로컬 `.env`의 `KAKAO_NATIVE_APP_KEY`가 실제 네이티브 앱 키여야 카카오 로그인이 통과한다). 앱이 서버에 붙는 방법(Wi-Fi IP, `adb reverse`)은 `../mapmarker-app/CLAUDE.md`.
 - Prisma 7(어댑터) 오류 코드: 유일 위반 P2002, Restrict P2003, 대상 없음 P2025, CHECK 위반 P2039.
 - Windows Git Bash의 curl은 명령줄 한글을 UTF-8로 보내지 않아 깨진다(서버 문제 아님). 한글 요청은 Swagger로 확인한다.
