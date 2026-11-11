@@ -149,10 +149,10 @@ export class StopsService {
     });
   }
 
-  /** 내 여행의 장소. 없거나 남의 장소면 404. */
+  /** 내 여행의 장소. 없거나 남의 장소, 휴지통 여행의 장소면 404. */
   private async findOwned(userId: string, stopId: string) {
     const stop = await this.prisma.stop.findFirst({
-      where: { id: stopId, trip: { userId } },
+      where: { id: stopId, trip: { userId, deletedAt: null } },
     });
     if (!stop) throw new NotFoundException();
     return stop;

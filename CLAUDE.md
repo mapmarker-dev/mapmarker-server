@@ -17,7 +17,7 @@ MapMarker의 API 서버. NestJS 12 + Prisma 7 + PostgreSQL 18, Node 24, npm. 원
 - 값은 `.env`(커밋하지 않음), 항목 목록은 `.env.example`. 변수를 더하면 `.env.example`과 `src/config/env.ts`의 `Env`도 고친다.
 - 서버 코드는 `ConfigService<Env, true>`로만 읽는다(`process.env` 금지). 시작할 때 `Env`로 검사해서 틀리면 서버가 뜨지 않는다. `scripts/`는 서버 코드가 아니라 `dotenv` + 같은 `validateEnv`로 읽는다. Prisma CLI는 `prisma.config.ts`가 `.env`를 읽는다.
 - `JWT_ACCESS_SECRET`(32자 이상): 로컬은 직접 만든 무작위 값(명령은 `.env.example`), e2e는 `test/setup/env.ts`의 테스트 전용 값(그래서 CI 워크플로에 없다), 운영은 1-7단계에서 AWS SSM·Secrets Manager.
-- `KAKAO_NATIVE_APP_KEY`: 카카오 id_token의 `aud`와 비교하는 네이티브 앱 키. 앱에도 들어가는 값이라 비밀은 아니다. 로컬은 카카오 앱 등록 전에는 아무 값(카카오 로그인만 401), e2e는 `test/setup/env.ts`의 테스트 값, 운영은 1-7단계에서 다른 값과 함께 둔다. 네이버는 서버에 둘 값이 없다.
+- `KAKAO_NATIVE_APP_KEY`: 카카오 id_token의 `aud`와 비교하는 네이티브 앱 키. 앱에도 들어가는 값이라 비밀은 아니다. 로컬은 카카오 콘솔의 네이티브 앱 키(아무 값이어도 서버는 뜨고 카카오 로그인만 401), e2e는 `test/setup/env.ts`의 테스트 값, 운영은 1-7단계에서 다른 값과 함께 둔다. 네이버는 서버에 둘 값이 없다.
 - e2e는 `TEST_DATABASE_URL`의 DB를 매번 지우고 다시 만든다. 이름이 `_test`로 끝나야 한다.
 
 ## CI
@@ -46,7 +46,7 @@ src/
 ├─ prisma/                 PrismaModule(전역), PrismaService
 ├─ auth/                   소셜 로그인, 토큰·세션, 전역 가드, @Public, @CurrentUser. 제공자 검증기는 social/
 ├─ common/                 같이 쓰는 코드: Prisma 오류 필터, 날짜·시각, 앱 ID 검사, @CanOmit
-├─ trips/                  여행·장소·구간 API. 동선 규칙은 route.ts
+├─ trips/                  여행·장소·구간·휴지통 API. 동선 규칙은 route.ts
 ├─ health/                 상태 확인
 └─ generated/prisma/       Prisma Client 생성물(커밋하지 않음)
 test/                      *.e2e-spec.ts, setup/(테스트 DB, 환경 변수, 토큰·ID·가짜 제공자·서명 키 도우미)
@@ -71,6 +71,14 @@ test/                      *.e2e-spec.ts, setup/(테스트 DB, 환경 변수, �
 - 구간은 장소 API가 만들고 지운다(ID는 서버가 만듦). 구간 API는 이동 수단·곡률·종류 고치기만 한다.
 - `legs`(jsonb)의 모양은 `TransportLegDto`가 검사한다. 상한(5토막, 정류장 99, 5999분)은 앱 `transport_draft.dart`와 같이 바꾼다.
 - 장소·구간을 바꾸면 `touchTrip`으로 여행 `updatedAt`도 바꾼다(여행 목록이 최근에 고친 순서).
+
+## 휴지통
+
+- `DELETE /v1/trips/:id`는 여행을 휴지통으로 옮긴다(`trips.deleted_at`). 휴지통의 여행은 `/v1/trash`(목록·되살리기·영구 삭제, `TrashService`) 말고는 없는 여행처럼 404다. 여행을 읽거나 고치는 쿼리를 새로 쓰면 `deletedAt: null`(SQL은 `deleted_at IS NULL`)로 거른다. 3단계 공유 링크 조회도 같다.
+- 휴지통으로 옮기기와 되살리기는 `updatedAt`을 바꾸지 않는다(되살리면 목록의 원래 자리). Prisma의 update·updateMany는 `@updatedAt`을 바꿔서 SQL로 쓴다.
+- 보관 기간(30일)은 `trips/trash-retention.ts`에만 둔다. 응답의 `purgeAt`으로 앱에 알리고, 보관 기간이 끝난 여행은 예약 삭제 전에도 휴지통 API에서 404다(`trashCutoff`).
+- 예약 삭제: `TrashService.purgeExpiredJob`이 한 시간마다(`@nestjs/schedule`, 이름 `trash-purge`) 보관 기간이 끝난 여행을 지운다. 여러 번 돌려도 결과가 같아서 서버가 여러 대여도 된다. 테스트는 `purgeExpired(now)`에 시각을 넘겨 본다.
+- 사진(1-3)이 생기면 영구 삭제와 예약 삭제가 사진과 S3 파일부터 지운다. 회원 탈퇴(1-6)는 휴지통을 거치지 않고 휴지통의 여행까지 바로 지운다.
 
 ## 인증
 
@@ -100,4 +108,4 @@ test/                      *.e2e-spec.ts, setup/(테스트 DB, 환경 변수, �
 ## 코딩 규칙
 
 - 커밋 전에 CI와 같은 `lint`, `format:check`, `test`, `build`, `test:e2e`가 통과하는지 본다.
-- 테스트 이름과 주석은 한국어(앱과 같음).
+- 테스트 이름과 주석은 한국어다.

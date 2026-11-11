@@ -161,6 +161,19 @@ describe('구간 API (e2e)', () => {
     expect((await detail()).segments).toEqual([segment]);
   });
 
+  it('휴지통에 든 여행의 구간은 404이고 그대로다', async () => {
+    await api()
+      .delete(`/v1/trips/${tripId}`)
+      .set('Authorization', bearer(me.token))
+      .expect(204);
+
+    await patch(segment.id, { curvature: 0.5 }).expect(404);
+    const row = await prisma.segment.findUniqueOrThrow({
+      where: { id: segment.id },
+    });
+    expect(row.curvature).toBe(segment.curvature);
+  });
+
   it('UUID v7이 아닌 경로는 400, 토큰이 없으면 401', async () => {
     const response = await patch(randomUUID(), { curvature: 0 }).expect(400);
     expect(response.body.message).toBe(

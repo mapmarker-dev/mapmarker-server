@@ -87,13 +87,16 @@ export class TripsController {
   @Delete(':tripId')
   @ApiAppIdParam('tripId')
   @HttpCode(HttpStatus.NO_CONTENT)
-  @ApiNoContentResponse({ description: '장소·구간도 함께 지운다' })
-  @ApiNotFoundResponse({ description: '없거나 다른 사람의 여행' })
-  @ApiConflictResponse({ description: '사진이 달린 장소가 있음' })
+  @ApiNoContentResponse({
+    description: '휴지통으로 옮긴다. 30일 뒤 장소·구간과 함께 지운다',
+  })
+  @ApiNotFoundResponse({
+    description: '없거나 다른 사람의 여행, 이미 휴지통에 있음',
+  })
   remove(
     @CurrentUser() user: AuthUser,
     @TripId() tripId: string,
   ): Promise<void> {
-    return this.tripsService.remove(user.id, tripId);
+    return this.tripsService.moveToTrash(user.id, tripId);
   }
 }

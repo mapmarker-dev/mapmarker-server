@@ -360,9 +360,16 @@ describe('여행 API (e2e)', () => {
     });
   });
 
-  describe('지우기', () => {
-    it('여행과 장소·구간을 지우고 204, 다시 부르면 404', async () => {
+  describe('지우기(휴지통으로 옮기기)', () => {
+    function trash(tripId: string, token = me.token) {
+      return api()
+        .delete(`/v1/trips/${tripId}`)
+        .set('Authorization', bearer(token));
+    }
+
+    it('204이고 목록·조회에서 빠진다. 장소·구간은 휴지통에 남는다', async () => {
       const trip = await created();
+      const kept = await created();
       const a = await addStop(trip.id, { day: 1, order: 0 });
       const b = await addStop(trip.id, { day: 1, order: 1 });
       await prisma.segment.create({
@@ -374,30 +381,71 @@ describe('여행 API (e2e)', () => {
         },
       });
 
-      await api()
-        .delete(`/v1/trips/${trip.id}`)
-        .set('Authorization', bearer(me.token))
-        .expect(204);
+      await trash(trip.id).expect(204);
 
       await api()
         .get(`/v1/trips/${trip.id}`)
         .set('Authorization', bearer(me.token))
         .expect(404);
-      expect(await prisma.stop.count()).toBe(0);
-      expect(await prisma.segment.count()).toBe(0);
+      const list = await api()
+        .get('/v1/trips')
+        .set('Authorization', bearer(me.token))
+        .expect(200);
+      expect(list.body.map((t: { id: string }) => t.id)).toEqual([kept.id]);
+      const row = await prisma.trip.findUniqueOrThrow({
+        where: { id: trip.id },
+      });
+      expect(row.deletedAt).toBeInstanceOf(Date);
+      expect(await prisma.stop.count()).toBe(2);
+      expect(await prisma.segment.count()).toBe(1);
     });
 
-    it('사진이 달린 장소가 있으면 409 (사진·S3를 먼저 지우는 처리는 1-3에서)', async () => {
+    it('고친 시각은 그대로다 (되살리면 원래 자리로 돌아간다)', async () => {
+      const trip = await created();
+      const before = await prisma.trip.findUniqueOrThrow({
+        where: { id: trip.id },
+      });
+
+      await trash(trip.id).expect(204);
+
+      const after = await prisma.trip.findUniqueOrThrow({
+        where: { id: trip.id },
+      });
+      expect(after.updatedAt).toEqual(before.updatedAt);
+    });
+
+    it('사진이 달린 장소가 있어도 옮긴다 (사진은 영구 삭제 때 지운다)', async () => {
       const trip = await created();
       const stop = await addStop(trip.id, { day: 1, order: 0 });
       await prisma.photo.create({
         data: { id: uuidv7(), stopId: stop.id, storageKey: 'k.jpg' },
       });
 
+      await trash(trip.id).expect(204);
+    });
+
+    it('이미 휴지통에 있으면 404, 고치기도 404', async () => {
+      const trip = await created();
+      await trash(trip.id).expect(204);
+
+      await trash(trip.id).expect(404);
       await api()
-        .delete(`/v1/trips/${trip.id}`)
+        .patch(`/v1/trips/${trip.id}`)
         .set('Authorization', bearer(me.token))
-        .expect(409);
+        .send({ title: 'x' })
+        .expect(404);
+    });
+
+    it('다른 사람의 여행은 404이고 그대로다', async () => {
+      const trip = await created();
+      const other = await createUserWithToken(app);
+
+      await trash(trip.id, other.token).expect(404);
+
+      const row = await prisma.trip.findUniqueOrThrow({
+        where: { id: trip.id },
+      });
+      expect(row.deletedAt).toBeNull();
     });
   });
 

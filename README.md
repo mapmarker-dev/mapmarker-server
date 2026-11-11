@@ -4,13 +4,13 @@
 
 ## 지금 상태
 
-1-1단계(서버 기본)를 마쳤습니다.
+1-1단계(서버 기본)를 마쳤고, 앱([mapmarker-app](https://github.com/mapmarker-dev/mapmarker-app))과 연동해 실기기에서 로그인과 저장을 확인했습니다.
 
 - DB 스키마(User, Trip, Stop, Segment, Photo)와 CI(GitHub Actions: lint, 형식, 단위, 빌드, e2e)
 - 카카오·네이버 소셜 로그인(`/v1/auth/login/kakao`, `/v1/auth/login/naver`). 앱이 SDK로 받은 토큰을 서버가 검증하고, 서버의 access 토큰(15분)과 refresh 토큰(30일, 쓸 때마다 교체)을 줍니다. 재발급 `/v1/auth/refresh`, 로그아웃 `/v1/auth/logout`
 - access 토큰(JWT)을 검사하는 인증. 모든 API에 걸려 있고 로그인·재발급·로그아웃과 `/health`만 열려 있습니다
 - 여행·장소·구간 API(`/v1/trips`, `/v1/stops`, `/v1/segments`). 장소를 넣고 옮기고 지우면 서버가 이웃한 장소 사이 구간을 앱과 같은 규칙으로 다시 잇습니다
-- 다음은 앱의 서버 연동과 사진 업로드(S3)입니다
+- 다음은 휴지통(지운 여행 30일 보관)과 사진 업로드(S3)입니다
 
 단계별 계획은 [PLAN](https://github.com/mapmarker-dev/.github/blob/main/docs/PLAN.md)에 있습니다.
 
@@ -90,7 +90,7 @@ src/
 ├─ app.setup.ts      전역 설정 (검증, /v1 버전, 오류 변환, Swagger)
 ├─ config/           환경 변수 검사
 ├─ prisma/           DB 연결 (PrismaService)
-├─ auth/             토큰 검사(전역 가드)
+├─ auth/             소셜 로그인, 토큰·세션, 전역 가드
 ├─ common/           기능끼리 같이 쓰는 코드 (날짜·시각, ID 검사, 오류 변환)
 ├─ trips/            여행·장소·구간 API (동선 규칙은 route.ts)
 └─ health/           상태 확인

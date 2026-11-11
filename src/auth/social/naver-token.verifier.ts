@@ -27,7 +27,7 @@ interface NaverProfileBody {
 /**
  * 네이버 로그인. 앱이 네이버 SDK로 받은 access token으로 네이버 프로필 API를 불러 사용자를 확인한다.
  *
- * 앱의 네이버 SDK(flutter_naver_login)는 id_token을 주지 않아서, 서명 검증 대신 네이버에 직접 묻는다.
+ * 앱의 네이버 SDK(naver_login_flutter)는 id_token을 주지 않아서, 서명 검증 대신 네이버에 직접 묻는다.
  * access token에는 aud가 없지만, 네이버 사용자 ID는 앱마다 달라서 다른 앱의 토큰으로는 우리 앱의 기존 계정에 닿지 못한다.
  * 서버에는 네이버 키가 필요 없다.
  */

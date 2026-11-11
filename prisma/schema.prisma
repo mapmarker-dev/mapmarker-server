@@ -142,6 +142,9 @@ model Trip {
   shareId          String?      @unique @map("share_id")
   createdAt        DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt        DateTime     @updatedAt @map("updated_at") @db.Timestamptz(3)
+  /// 휴지통에 넣은 시각. 있으면 휴지통의 여행이라 휴지통 API 말고는 없는 여행(404)과 같다.
+  /// 30일 뒤 예약 삭제가 지운다(trips/trash-retention.ts). 넣고 되살릴 때 updatedAt은 그대로 둔다.
+  deletedAt        DateTime?    @map("deleted_at") @db.Timestamptz(3)
 
   user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   copiedFrom Trip?     @relation("TripCopies", fields: [copiedFromTripId], references: [id], onDelete: SetNull)
@@ -152,6 +155,8 @@ model Trip {
   // 여행 목록: 내 여행을 최근에 고친 순서로.
   @@index([userId, updatedAt(sort: Desc)])
   @@index([copiedFromTripId])
+  // 예약 삭제: 보관 기간이 지난 여행.
+  @@index([deletedAt])
   @@map("trips")
 }
 

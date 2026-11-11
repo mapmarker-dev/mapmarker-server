@@ -19,7 +19,7 @@ export class SegmentsService {
     dto: UpdateSegmentDto,
   ): Promise<SegmentResponse> {
     const segment = await this.prisma.segment.findFirst({
-      where: { id: segmentId, trip: { userId } },
+      where: { id: segmentId, trip: { userId, deletedAt: null } },
     });
     if (!segment) throw new NotFoundException();
     return this.prisma.$transaction(async (tx) => {

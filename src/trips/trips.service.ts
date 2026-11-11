@@ -4,7 +4,6 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { parseLocalDate } from '../common/local-date';
-import { Prisma } from '../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateTripDto } from './dto/create-trip.dto';
 import { TripDetailResponse } from './dto/trip-detail-response.dto';
@@ -16,16 +15,17 @@ import { lockOwnedTrip } from './trip-lock';
 
 /**
  * 여행. 모든 쿼리를 사용자 ID로 거른다. 남의 여행은 없는 여행과 똑같이 404라서, 있는지도 알 수 없다.
+ * 휴지통의 여행(deletedAt)도 404다. 휴지통 안의 여행은 TrashService가 다룬다.
  * 자동 상태(전/중/후)는 계산하지 않는다. 사용자가 직접 바꾼 상태(phaseOverride)만 저장하고 돌려준다.
  */
 @Injectable()
 export class TripsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  /** 내 여행 목록. 최근에 고친 여행이 앞에 온다. */
+  /** 내 여행 목록(휴지통 빼고). 최근에 고친 여행이 앞에 온다. */
   async list(userId: string): Promise<TripResponse[]> {
     const trips = await this.prisma.trip.findMany({
-      where: { userId },
+      where: { userId, deletedAt: null },
       orderBy: { updatedAt: 'desc' },
     });
     return trips.map(toTripResponse);
@@ -52,7 +52,11 @@ export class TripsService {
   }
 
   async get(userId: string, tripId: string): Promise<TripDetailResponse> {
-    const detail = await readTripDetail(this.prisma, { id: tripId, userId });
+    const detail = await readTripDetail(this.prisma, {
+      id: tripId,
+      userId,
+      deletedAt: null,
+    });
     if (!detail) throw new NotFoundException();
     return detail;
   }
@@ -103,26 +107,15 @@ export class TripsService {
   }
 
   /**
-   * 여행을 지운다. 장소·구간은 DB가 함께 지운다.
-   * 사진이 달린 장소가 있으면 DB가 막아서(Restrict) 409다. 사진 단계(1-3)에서 사진과 S3 파일부터 지우게 바꾼다.
+   * 여행을 휴지통으로 옮긴다. 장소·구간은 그대로 두고, 되살리면 원래 자리로 돌아가게 updatedAt도 둔다
+   * (Prisma의 update는 updatedAt을 바꿔서 SQL로 쓴다). 이미 휴지통에 있으면 404.
+   * 여행 줄을 바꾸므로 장소 넣기 등(lockOwnedTrip)과 차례로 처리되고, 뒤에 온 쪽은 휴지통의 여행이라 404다.
    */
-  async remove(userId: string, tripId: string): Promise<void> {
-    let count: number;
-    try {
-      ({ count } = await this.prisma.trip.deleteMany({
-        where: { id: tripId, userId },
-      }));
-    } catch (error) {
-      if (
-        error instanceof Prisma.PrismaClientKnownRequestError &&
-        error.code === 'P2003'
-      ) {
-        throw new ConflictException(
-          '사진이 있는 장소가 있어 여행을 지울 수 없습니다',
-        );
-      }
-      throw error;
-    }
+  async moveToTrash(userId: string, tripId: string): Promise<void> {
+    const count = await this.prisma.$executeRaw`
+      UPDATE trips SET deleted_at = now()
+      WHERE id = ${tripId}::uuid AND user_id = ${userId}::uuid
+        AND deleted_at IS NULL`;
     if (count === 0) throw new NotFoundException();
   }
 }
