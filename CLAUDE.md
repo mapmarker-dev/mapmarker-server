@@ -67,7 +67,7 @@ test/                      *.e2e-spec.ts, setup/(테스트 DB, 환경 변수, �
 ## 동선(장소·구간)
 
 - 규칙(순서 다시 매기기, 이웃 사이 구간)은 `trips/route.ts`의 순수 함수에만 둔다. 앱 `route_links.dart`와 같은 규칙이라 한쪽을 바꾸면 다른 쪽과 테스트 사례도 바꾼다.
-- 동선을 확인하고 바꾸는 요청(기간 바꾸기, 장소 넣기·옮기기·지우기)은 트랜잭션에서 `lockOwnedTrip`으로 여행 줄부터 잠근다(소유자 확인 겸). 서비스는 계산 결과를 반영만 하고(`applyRoute`) `{ trip, stops, segments }` 전체를 돌려준다.
+- 동선을 확인하고 바꾸는 요청(기간 바꾸기, 장소 넣기·옮기기·지우기, 동선에 넣기·후보로 빼기)은 트랜잭션에서 `lockOwnedTrip`으로 여행 줄부터 잠근다(소유자 확인 겸). 서비스는 계산 결과를 반영만 하고(`route-apply.ts`의 `applyRoute`) `{ trip, stops, segments, candidates }` 전체를 돌려준다.
 - 구간은 장소 API가 만들고 지운다(ID는 서버가 만듦). 구간 API는 이동 수단·곡률·종류 고치기만 한다.
 - `legs`(jsonb)의 모양은 `TransportLegDto`가 검사한다. 상한(5토막, 정류장 99, 5999분)은 앱 `transport_draft.dart`와 같이 바꾼다.
 - 장소·구간을 바꾸면 `touchTrip`으로 여행 `updatedAt`도 바꾼다(여행 목록이 최근에 고친 순서).
@@ -77,6 +77,9 @@ test/                      *.e2e-spec.ts, setup/(테스트 DB, 환경 변수, �
 - 후보(`candidates`)는 장소와 따로 된 테이블이다. 일차·순서·구간·사진이 없고 넣은 순서(`createdAt`, 같으면 `id`, `CANDIDATE_ORDER`)로 보여 준다. 설계 이유는 `.github` OVERVIEW "후보 장소".
 - 여행 조회와 동선을 바꾸는 응답(`TripDetailResponse`)에 `candidates`가 함께 온다. 후보 넣기·고치기·지우기는 동선이 바뀌지 않아 후보 하나만 돌려준다(지우기는 204). 바꾸면 `touchTrip`.
 - 한 ID가 장소와 후보에 함께 있으면 안 된다(동선에 넣기·후보로 빼기가 같은 ID로 옮긴다). 넣기 전에 여행 줄을 잠그고 `place-checks.ts`의 `ensureNotStop`·`ensureNotCandidate`로 다른 쪽 테이블을 보고 409. `checkPlace`(장소 서비스 ID 짝)도 장소와 같이 쓴다.
+- **동선에 넣기**(`POST /v1/candidates/:id/stop`, `CandidatesService.promote`)와 **후보로 빼기**(`POST /v1/stops/:id/candidate`, `StopsService.demote`)는 같은 ID로 테이블을 옮기는 한 트랜잭션이고 200 + 새 동선이다. 잠근 뒤에 옮길 줄을 다시 읽는다(먼저 온 요청이 이미 옮겼으면 404).
+  - 넣기: 일차·자리는 장소 넣기와 같은 규칙. 이름·종류·설명·메모·예정 시각·시간대는 보낸 값(없으면 후보 값, 예정 시각 없음, Asia/Seoul), 좌표·장소 서비스 ID는 후보 값.
+  - 빼기: 장소 지우기처럼 앞뒤를 잇고 후보는 맨 뒤. 일차·순서·예정 시각·방문·시간대와 닿은 구간의 이동 수단은 사라진다. 사진이 있으면 409(1-3에서 정한다).
 - 여행을 따라간다: 휴지통 여행의 후보는 404, 영구·예약 삭제와 회원 탈퇴 때 Cascade. 후보 하나는 휴지통 없이 바로 지운다.
 
 ## 휴지통

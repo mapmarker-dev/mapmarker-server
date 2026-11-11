@@ -24,11 +24,14 @@ import { ApiAppIdParam, AppIdParam } from '../common/app-id';
 import { CandidatesService } from './candidates.service';
 import { CandidateResponse } from './dto/candidate-response.dto';
 import { CreateCandidateDto } from './dto/create-candidate.dto';
+import { PromoteCandidateDto } from './dto/promote-candidate.dto';
+import { TripDetailResponse } from './dto/trip-detail-response.dto';
 import { UpdateCandidateDto } from './dto/update-candidate.dto';
 
 /**
  * 후보 장소. 넣기는 여행 아래(/v1/trips/:tripId/candidates), 나머지는 후보 ID로(/v1/candidates/:candidateId) 부른다.
- * 동선이 바뀌지 않아서 후보 하나만 돌려준다. 여행을 읽으면(GET /v1/trips/:id) 후보 목록이 함께 온다.
+ * 넣기·고치기·지우기는 동선이 바뀌지 않아서 후보 하나만 돌려준다. 여행을 읽으면(GET /v1/trips/:id) 후보 목록이 함께 온다.
+ * 동선에 넣기(POST .../stop)는 새 동선 전체를 돌려준다. 옮기기라서 201이 아니라 200이다(후보로 빼기와 같다).
  */
 @ApiTags('candidates')
 @ApiBearerAuth()
@@ -62,6 +65,25 @@ export class CandidatesController {
     @Body() dto: UpdateCandidateDto,
   ): Promise<CandidateResponse> {
     return this.candidatesService.update(user.id, candidateId, dto);
+  }
+
+  @Post('candidates/:candidateId/stop')
+  @HttpCode(HttpStatus.OK)
+  @ApiAppIdParam('candidateId')
+  @ApiOkResponse({
+    type: TripDetailResponse,
+    description: '새 동선(후보가 같은 ID의 장소가 됨)',
+  })
+  @ApiBadRequestResponse({
+    description: '입력이 틀림(여행 일수 밖의 일차 포함)',
+  })
+  @ApiNotFoundResponse({ description: '없거나 다른 사람의 후보' })
+  promote(
+    @CurrentUser() user: AuthUser,
+    @AppIdParam('candidateId') candidateId: string,
+    @Body() dto: PromoteCandidateDto,
+  ): Promise<TripDetailResponse> {
+    return this.candidatesService.promote(user.id, candidateId, dto);
   }
 
   @Delete('candidates/:candidateId')

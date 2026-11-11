@@ -1,4 +1,13 @@
-import { Body, Controller, Delete, Patch, Post, Put } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  HttpCode,
+  HttpStatus,
+  Patch,
+  Post,
+  Put,
+} from '@nestjs/common';
 import {
   ApiBadRequestResponse,
   ApiBearerAuth,
@@ -21,7 +30,7 @@ import { StopsService } from './stops.service';
 
 /**
  * 장소. 넣기는 여행 아래(/v1/trips/:tripId/stops), 나머지는 장소 ID로(/v1/stops/:stopId) 부른다.
- * 동선이 바뀌는 요청(넣기·옮기기·지우기)은 여행의 새 동선 전체를 돌려준다.
+ * 동선이 바뀌는 요청(넣기·옮기기·지우기·후보로 빼기)은 여행의 새 동선 전체를 돌려준다.
  */
 @ApiTags('stops')
 @ApiBearerAuth()
@@ -70,6 +79,23 @@ export class StopsController {
     @Body() dto: MoveStopDto,
   ): Promise<TripDetailResponse> {
     return this.stopsService.move(user.id, stopId, dto);
+  }
+
+  @Post('stops/:stopId/candidate')
+  @HttpCode(HttpStatus.OK)
+  @ApiAppIdParam('stopId')
+  @ApiOkResponse({
+    type: TripDetailResponse,
+    description:
+      '새 동선(장소가 같은 ID의 후보가 되어 맨 뒤에 오고, 앞뒤 장소는 새로 이어진다)',
+  })
+  @ApiNotFoundResponse({ description: '없거나 다른 사람의 장소' })
+  @ApiConflictResponse({ description: '사진이 달린 장소' })
+  demote(
+    @CurrentUser() user: AuthUser,
+    @AppIdParam('stopId') stopId: string,
+  ): Promise<TripDetailResponse> {
+    return this.stopsService.demote(user.id, stopId);
   }
 
   @Delete('stops/:stopId')
