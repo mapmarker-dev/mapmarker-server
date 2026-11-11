@@ -6,13 +6,13 @@ import {
 } from '@nestjs/common';
 import { parseLocalTime } from '../common/local-time';
 import { Prisma } from '../generated/prisma/client';
-import { MapProvider } from '../generated/prisma/enums';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateStopDto } from './dto/create-stop.dto';
 import { MoveStopDto } from './dto/move-stop.dto';
 import { StopResponse, toStopResponse } from './dto/stop-response.dto';
 import { TripDetailResponse } from './dto/trip-detail-response.dto';
 import { UpdateStopDto } from './dto/update-stop.dto';
+import { checkPlace, ensureNotCandidate } from './place-checks';
 import { diffSegments, placeStop, removeStop, RouteStop } from './route';
 import { readTripDetail } from './trip-detail';
 import { lockOwnedTrip } from './trip-lock';
@@ -29,7 +29,10 @@ type Tx = Prisma.TransactionClient;
 export class StopsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  /** 같은 ID가 이미 있으면 전역 Prisma 필터가 409로 바꾼다(같은 곳을 다시 넣을 때는 앱이 새 ID를 만든다). */
+  /**
+   * 같은 ID의 장소가 이미 있으면 전역 Prisma 필터가 409로 바꾼다(같은 곳을 다시 넣을 때는 앱이 새 ID를 만든다).
+   * 같은 ID의 후보가 있어도 409다(후보를 동선에 넣는 것은 POST /v1/candidates/:id/stop).
+   */
   async create(
     userId: string,
     tripId: string,
@@ -39,6 +42,7 @@ export class StopsService {
     return this.prisma.$transaction(async (tx) => {
       const { nights } = await lockOwnedTrip(tx, userId, tripId);
       checkDay(nights, dto.day);
+      await ensureNotCandidate(tx, dto.id);
       const before = await routeStops(tx, tripId);
       const after = placeStop(
         before,
@@ -164,18 +168,6 @@ function checkDay(nights: number, day: number): void {
   if (day > nights + 1) {
     throw new BadRequestException(
       `day는 1~${nights + 1}이어야 합니다(${nights}박 ${nights + 1}일 여행)`,
-    );
-  }
-}
-
-/** 장소 서비스 ID는 어느 서비스의 것인지 함께 있어야 쓸 수 있다. 둘 다 있거나 둘 다 없다. */
-function checkPlace(
-  provider: MapProvider | null | undefined,
-  placeId: string | null | undefined,
-): void {
-  if ((provider == null) !== (placeId == null)) {
-    throw new BadRequestException(
-      'placeProvider와 placeId는 둘 다 있거나 둘 다 없어야 합니다',
     );
   }
 }

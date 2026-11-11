@@ -4,11 +4,11 @@
 
 ## 지금 하는 일
 
-휴지통(PLAN 1-2 마지막 항목)을 마쳤다(커밋 3개: 휴지통으로 옮기기 → 휴지통 API → 예약 삭제). 앱과 함께 실기기에서 지우기·되살리기·영구 삭제를 확인했다. 동작과 규칙은 `CLAUDE.md` "휴지통", 큰 결정은 `.github` OVERVIEW. dev → main PR을 merge commit으로 합치는 중이다.
+후보 장소(PLAN "1-2 후속")를 만드는 중이다. 서버 커밋 2개 중 첫째(후보 테이블, 여행 조회 응답의 `candidates`, 후보 넣기·고치기·지우기 API)를 마쳤다. 규칙은 `CLAUDE.md` "후보". 앱은 서버 둘째 커밋 뒤에 붙인다(`../mapmarker-app/HANDOFF.md`).
 
 ## 다음에 할 첫 단계
 
-1. PR을 합친 뒤 다음 단위는 후보 장소(PLAN "1-2 후속": 장소와 따로 된 후보 테이블, CRUD, 동선에 넣기·후보로 빼기, 여행 조회 응답에 `candidates`)다. 설계 이유는 `.github` OVERVIEW "후보 장소".
+1. 서버 둘째 커밋: **동선에 넣기** `POST /v1/candidates/:candidateId/stop`(본문 일차·자리 + 고칠 값 이름·종류·설명·메모·예정 시각·시간대, 후보를 지우고 같은 ID·좌표·장소 서비스 ID의 장소를 `placeStop` 자리에)와 **후보로 빼기** `POST /v1/stops/:stopId/candidate`(장소를 지우고 같은 ID 후보를 맨 뒤에, 앞뒤는 `removeStop`으로 잇기, 사진이 있으면 409). 둘 다 여행 줄 잠금 + 한 트랜잭션 + `TripDetailResponse`. `stops.service.ts`의 `applyRoute`·`routeStops`를 함께 쓰게 옮긴다.
 2. 그다음 1-3단계(사진 Presigned URL)다. AWS 계정(PLAN 0단계)을 먼저 만든다. 사진은 S3를 지우는 때가 "영구 삭제·예약 삭제"다(사진이 달린 여행은 지금 영구 삭제가 409, 예약 삭제는 그 시간 작업 전체가 실패한다).
 
 ## 다음 단위로 넘길 것
@@ -18,7 +18,8 @@
 
 ## 현재 상태
 
-- lint, 형식, 단위 96개, 빌드, e2e 197개(앱 4, 인증 6, 로그인 14, 세션 19, 여행 40, 장소 45, 구간 16, 휴지통 15, 스키마 38) 로컬 통과.
+- lint, 형식, 단위 96개, 빌드, e2e 232개(앱 4, 인증 6, 로그인 14, 세션 19, 여행 40, 장소 45, 구간 16, 후보 32, 휴지통 15, 스키마 41) 로컬 통과.
+- e2e 실행마다 pg의 `client.query()` DeprecationWarning이 한 번 나온다. 후보 전부터 있던 것이다(pg 9 전에 Prisma 어댑터가 고칠 일).
 - 카카오·네이버 로그인은 앱에서 실제 토큰으로 확인했다(로컬 `.env`의 `KAKAO_NATIVE_APP_KEY`가 실제 네이티브 앱 키여야 카카오 로그인이 통과한다). 앱이 서버에 붙는 방법(Wi-Fi IP, `adb reverse`)은 `../mapmarker-app/CLAUDE.md`.
 - Prisma 7(어댑터) 오류 코드: 유일 위반 P2002, Restrict P2003, 대상 없음 P2025, CHECK 위반 P2039.
 - Windows Git Bash의 curl은 명령줄 한글을 UTF-8로 보내지 않아 깨진다(서버 문제 아님). 한글 요청은 Swagger로 확인한다.

@@ -46,7 +46,7 @@ src/
 ├─ prisma/                 PrismaModule(전역), PrismaService
 ├─ auth/                   소셜 로그인, 토큰·세션, 전역 가드, @Public, @CurrentUser. 제공자 검증기는 social/
 ├─ common/                 같이 쓰는 코드: Prisma 오류 필터, 날짜·시각, 앱 ID 검사, @CanOmit
-├─ trips/                  여행·장소·구간·휴지통 API. 동선 규칙은 route.ts
+├─ trips/                  여행·장소·구간·후보·휴지통 API. 동선 규칙은 route.ts
 ├─ health/                 상태 확인
 └─ generated/prisma/       Prisma Client 생성물(커밋하지 않음)
 test/                      *.e2e-spec.ts, setup/(테스트 DB, 환경 변수, 토큰·ID·가짜 제공자·서명 키 도우미)
@@ -71,6 +71,13 @@ test/                      *.e2e-spec.ts, setup/(테스트 DB, 환경 변수, �
 - 구간은 장소 API가 만들고 지운다(ID는 서버가 만듦). 구간 API는 이동 수단·곡률·종류 고치기만 한다.
 - `legs`(jsonb)의 모양은 `TransportLegDto`가 검사한다. 상한(5토막, 정류장 99, 5999분)은 앱 `transport_draft.dart`와 같이 바꾼다.
 - 장소·구간을 바꾸면 `touchTrip`으로 여행 `updatedAt`도 바꾼다(여행 목록이 최근에 고친 순서).
+
+## 후보
+
+- 후보(`candidates`)는 장소와 따로 된 테이블이다. 일차·순서·구간·사진이 없고 넣은 순서(`createdAt`, 같으면 `id`, `CANDIDATE_ORDER`)로 보여 준다. 설계 이유는 `.github` OVERVIEW "후보 장소".
+- 여행 조회와 동선을 바꾸는 응답(`TripDetailResponse`)에 `candidates`가 함께 온다. 후보 넣기·고치기·지우기는 동선이 바뀌지 않아 후보 하나만 돌려준다(지우기는 204). 바꾸면 `touchTrip`.
+- 한 ID가 장소와 후보에 함께 있으면 안 된다(동선에 넣기·후보로 빼기가 같은 ID로 옮긴다). 넣기 전에 여행 줄을 잠그고 `place-checks.ts`의 `ensureNotStop`·`ensureNotCandidate`로 다른 쪽 테이블을 보고 409. `checkPlace`(장소 서비스 ID 짝)도 장소와 같이 쓴다.
+- 여행을 따라간다: 휴지통 여행의 후보는 404, 영구·예약 삭제와 회원 탈퇴 때 Cascade. 후보 하나는 휴지통 없이 바로 지운다.
 
 ## 휴지통
 
@@ -101,7 +108,7 @@ test/                      *.e2e-spec.ts, setup/(테스트 DB, 환경 변수, �
 - 스키마를 바꾸면 `npm run db:migrate -- --name <이름>`, 만든 SQL을 확인해 커밋한다. 적용된 마이그레이션은 고치지 않는다. Prisma 7의 `migrate dev`는 Client를 다시 만들지 않으니 `npm run prisma:generate`도 돌린다(안 하면 새 모델이 `undefined`).
 - Prisma가 못 쓰는 제약(CHECK, 미룰 수 있는 유일 제약)은 `-- --create-only`로 SQL만 만들어 손으로 넣는다. 적용 뒤 `npx prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma`가 "No difference detected"인지 본다.
 - 테이블·칼럼은 snake_case(`@map`), 시각 칼럼은 `@db.Timestamptz(3)`.
-- 앱이 만든 ID(Trip·Stop·Photo)는 기본값 없음. 서버가 만드는 ID(User·Segment·SocialAccount·AuthSession)만 `@default(uuid(7))`(Prisma가 만드는 값이라 마이그레이션은 없다).
+- 앱이 만든 ID(Trip·Stop·Candidate·Photo)는 기본값 없음. 서버가 만드는 ID(User·Segment·SocialAccount·AuthSession)만 `@default(uuid(7))`(Prisma가 만드는 값이라 마이그레이션은 없다).
 - 연결은 드라이버 어댑터(`@prisma/adapter-pg`, `PrismaService`).
 - 스키마 제약은 `test/schema.e2e-spec.ts`에서 실제 DB로 확인한다. 제약을 더하면 막는 경우와 통과하는 경우를 더한다.
 
