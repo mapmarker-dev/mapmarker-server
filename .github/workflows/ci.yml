@@ -4,7 +4,6 @@ name: CI
 
 on:
   push:
-    # wip/**는 작업 중 커밋이라 돌리지 않는다.
     branches: [main, dev, test]
   pull_request:
     branches: [main]
