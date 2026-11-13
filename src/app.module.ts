@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { ScheduleModule } from '@nestjs/schedule';
+import { AddressesModule } from './addresses/addresses.module';
 import { AuthModule } from './auth/auth.module';
 import { validateEnv } from './config/env';
 import { HealthModule } from './health/health.module';
@@ -20,6 +21,7 @@ import { TripsModule } from './trips/trips.module';
     AuthModule,
     HealthModule,
     TripsModule,
+    AddressesModule,
   ],
 })
 export class AppModule {}

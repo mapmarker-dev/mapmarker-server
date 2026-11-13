@@ -8,3 +8,6 @@ process.env.NODE_ENV = 'test';
 process.env.JWT_ACCESS_SECRET = 'test-only-jwt-secret-not-for-real-use';
 // e2e는 카카오·네이버 검증기를 가짜로 바꿔 끼워서 이 값으로 실제 카카오에 붙지 않는다.
 process.env.KAKAO_NATIVE_APP_KEY = 'test-kakao-native-app-key';
+// e2e는 행안부 주소 클라이언트를 가짜로 바꿔 끼워서(setup/juso.ts) 이 값으로 실제 API에 붙지 않는다.
+process.env.JUSO_ADDRESS_KEY = 'test-juso-address-key';
+process.env.JUSO_COORD_KEY = 'test-juso-coord-key';

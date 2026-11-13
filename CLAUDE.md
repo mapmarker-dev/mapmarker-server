@@ -18,6 +18,7 @@ MapMarker의 API 서버. NestJS 12 + Prisma 7 + PostgreSQL 18, Node 24, npm. 원
 - 서버 코드는 `ConfigService<Env, true>`로만 읽는다(`process.env` 금지). 시작할 때 `Env`로 검사해서 틀리면 뜨지 않는다. `scripts/`는 `dotenv` + 같은 `validateEnv`, Prisma CLI는 `prisma.config.ts`가 `.env`를 읽는다.
 - `JWT_ACCESS_SECRET`(32자 이상): 로컬은 직접 만든 무작위 값(명령은 `.env.example`), e2e는 `test/setup/env.ts`의 테스트 전용 값(그래서 CI 워크플로에 없다), 운영은 1-7단계에서 AWS SSM·Secrets Manager.
 - `KAKAO_NATIVE_APP_KEY`: 카카오 id_token의 `aud`와 비교하는 네이티브 앱 키. 앱에도 들어가는 값이라 비밀은 아니다. 로컬은 카카오 콘솔의 키(아무 값이어도 서버는 뜨고 카카오 로그인만 401), e2e는 `test/setup/env.ts`의 테스트 값, 운영은 1-7단계에서. 네이버는 서버에 둘 값이 없다.
+- `JUSO_ADDRESS_KEY`·`JUSO_COORD_KEY`: 행안부 도로명주소 검색 API·좌표제공 API 승인키(비밀, API마다 따로). 받는 곳은 `.env.example`. e2e는 `test/setup/env.ts`의 테스트 값이고 주소 클라이언트를 가짜로 바꿔 끼운다. 개발 승인키는 기간이 끝나면 주소 검색이 500이다(로그에 "승인키 오류").
 - e2e는 `TEST_DATABASE_URL`의 DB를 매번 지우고 다시 만든다. 이름이 `_test`로 끝나야 한다.
 
 ## CI
@@ -47,6 +48,7 @@ src/
 ├─ auth/                   소셜 로그인, 토큰·세션, 전역 가드, @Public, @CurrentUser. 제공자 검증기는 social/
 ├─ common/                 같이 쓰는 코드: Prisma 오류 필터, 날짜·시각, 앱 ID 검사, @CanOmit
 ├─ trips/                  여행·장소·구간·후보·휴지통 API. 동선 규칙은 route.ts
+├─ addresses/              주소 검색·좌표 API(행안부 도로명주소 API)
 ├─ health/                 상태 확인
 └─ generated/prisma/       Prisma Client 생성물(커밋하지 않음)
 test/                      *.e2e-spec.ts, setup/(테스트 DB, 환경 변수, 토큰·ID·가짜 제공자·서명 키 도우미)
@@ -82,6 +84,15 @@ test/                      *.e2e-spec.ts, setup/(테스트 DB, 환경 변수, �
   - 넣기: 일차·자리는 장소 넣기와 같은 규칙. 이름·주소·종류·설명·메모·예정 시각·시간대는 보낸 값(없으면 후보 값, 예정 시각 없음, Asia/Seoul), 좌표·장소 서비스 ID는 후보 값.
   - 빼기: 장소 지우기처럼 앞뒤를 잇고 후보는 맨 뒤. 일차·순서·예정 시각·방문·시간대와 닿은 구간의 이동 수단은 사라진다. 사진이 있으면 409(1-3에서 정한다).
 - 여행을 따라간다: 휴지통 여행의 후보는 404, 영구·예약 삭제와 회원 탈퇴 때 Cascade. 후보 하나는 휴지통 없이 바로 지운다.
+
+## 주소 검색
+
+- `GET /v1/addresses?query=`(주소 검색)과 `GET /v1/addresses/coordinates`(검색 결과의 `ref`로 좌표)는 앱이 장소·후보를 넣기 전에 부른다. 결과를 DB에 두지 않는다(앱이 장소·후보로 저장한다).
+- 행안부 공공데이터(이용허락범위 제한 없음)만 쓴다. 카카오 로컬·네이버 검색·NCP 지오코딩·VWorld는 약관이 결과 저장을 막는다(`.github` OVERVIEW).
+- 검색어 다듬기(`address-query.ts`): "대한민국"·괄호 참고 항목·특수문자·SQL 예약어를 빼고, 도로명·건물번호(또는 지번)까지를 검색어로, 그 뒤를 상세 주소(`detail`)로 나눈다. 행안부는 SQL 예약어·특수문자가 든 검색어에 IP를 막을 수 있어서 보내기 전에 지운다.
+- 좌표제공 API는 UTM-K(EPSG:5179)를 준다. `utm-k.ts`가 `proj4`로 위경도로 바꾼다(버전 고정, 올릴 때 단위 테스트를 본다).
+- 오류: 다듬은 뒤 찾을 글이 없으면 400, 행안부의 검색어 오류(E0005 등)는 빈 결과, 장애·호출 과다(-999, E0007)와 연결 실패·5초 초과는 503, 승인키 오류(E0001, E0014)는 500(로그). 로그에 승인키가 든 주소를 남기지 않는다.
+- 테스트: 단위는 `fetch`를 가짜로, e2e는 `withFakeJuso(builder, fake)`(`test/setup/juso.ts`)로 `JusoClient`를 바꿔 끼운다.
 
 ## 휴지통
 
