@@ -22,6 +22,8 @@ import { MAX_NIGHTS } from './create-trip.dto';
 export const STOP_NAME_MAX_LENGTH = 50;
 export const STOP_TEXT_MAX_LENGTH = 1000;
 export const PLACE_ID_MAX_LENGTH = 200;
+/** 주소 최대 글자 수. 앱의 StopDraft.addressMaxLength와 같다. */
+export const ADDRESS_MAX_LENGTH = 200;
 
 export const TIME_ZONE_MESSAGE =
   'timeZone은 IANA 시간대 이름이어야 합니다(예: Asia/Seoul)';
@@ -66,6 +68,17 @@ export class CreateStopDto {
   @Matches(NOT_BLANK, { message: 'name이 비어 있습니다' })
   @MaxLength(STOP_NAME_MAX_LENGTH)
   name: string;
+
+  @ApiPropertyOptional({
+    maxLength: ADDRESS_MAX_LENGTH,
+    default: '',
+    example: '부산광역시 해운대구 해운대해변로 264',
+    description: '주소. 좌표와 따로 고친다',
+  })
+  @CanOmit()
+  @IsString()
+  @MaxLength(ADDRESS_MAX_LENGTH)
+  address?: string;
 
   @ApiPropertyOptional({
     enum: StopKind,

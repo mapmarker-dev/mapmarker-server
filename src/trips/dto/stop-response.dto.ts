@@ -27,6 +27,9 @@ export class StopResponse {
   @ApiProperty()
   name: string;
 
+  @ApiProperty({ description: '주소. 없으면 빈 문자열' })
+  address: string;
+
   @ApiProperty({ enum: StopKind, enumName: 'StopKind' })
   kind: StopKind;
 
@@ -69,6 +72,7 @@ export function toStopResponse(stop: Stop): StopResponse {
     latitude: stop.latitude,
     longitude: stop.longitude,
     name: stop.name,
+    address: stop.address,
     kind: stop.kind,
     description: stop.description,
     memo: stop.memo,

@@ -60,6 +60,7 @@ test/                      *.e2e-spec.ts, setup/(테스트 DB, 환경 변수, �
 - 본문은 DTO(class-validator)로 검사하고, DTO에 없는 필드는 400. Swagger용으로 DTO에 `@ApiProperty`, 컨트롤러에 응답 데코레이터를 단다. production에서는 Swagger를 열지 않는다.
 - JSON 필드 이름은 앱 모델(`../mapmarker-app/lib/data/models/`)과 같은 camelCase. 날짜 `"2026-10-15"`, 예정 시각 `"09:30"`(`common/local-date.ts`·`local-time.ts`), 순간은 ISO 8601 UTC.
 - 앱이 만든 ID(UUID v7)는 `common/app-id.ts`로 받는다: 본문 `@IsAppId()`, 경로 `AppIdParam(name)` + `@ApiAppIdParam(name)`, 응답 `@ApiIdProperty()`(Swagger 기본 예시 v4를 v7로 바꿔 준다). 테스트는 `test/setup/ids.ts`의 `uuidv7()`.
+- 장소·후보의 주소(`address`)는 빈 문자열이 기본이고 200자(`ADDRESS_MAX_LENGTH`)까지다. 좌표와 따로 고친다(주소를 바꿔도 좌표는 그대로).
 - PATCH에서 null로 지울 수 없는 필드는 `@CanOmit()`, 지우는 필드는 `@IsOptional()`(null도 건너뛰어서 DB까지 가면 500).
 - **남의 자원은 404로 숨긴다**(`where: { id, userId }`). 403은 쓰지 않는다.
 - 오류: 400 입력, 401 토큰, 404 없음·남의 것, 409 중복 ID·상태 충돌, 503 외부 서비스(카카오·네이버)에 닿지 못함. 예상하는 경우는 서비스가 먼저 확인하고, 전역 `PrismaExceptionFilter`는 남은 P2002 → 409, P2025 → 404만 바꾼다. 나머지 DB 오류는 서비스가 놓친 버그라 500.
@@ -78,7 +79,7 @@ test/                      *.e2e-spec.ts, setup/(테스트 DB, 환경 변수, �
 - 여행 조회와 동선을 바꾸는 응답(`TripDetailResponse`)에 `candidates`가 함께 온다. 후보 넣기·고치기·지우기는 동선이 바뀌지 않아 후보 하나만 돌려준다(지우기는 204). 바꾸면 `touchTrip`.
 - 한 ID가 장소와 후보에 함께 있으면 안 된다(동선에 넣기·후보로 빼기가 같은 ID로 옮긴다). 넣기 전에 여행 줄을 잠그고 `place-checks.ts`의 `ensureNotStop`·`ensureNotCandidate`로 다른 쪽을 보고 409. `checkPlace`(장소 서비스 ID 짝)도 장소와 같이 쓴다.
 - **동선에 넣기**(`POST /v1/candidates/:id/stop`, `CandidatesService.promote`)와 **후보로 빼기**(`POST /v1/stops/:id/candidate`, `StopsService.demote`)는 같은 ID로 테이블을 옮기는 한 트랜잭션이고 200 + 새 동선이다. 잠근 뒤에 옮길 줄을 다시 읽는다(먼저 온 요청이 이미 옮겼으면 404).
-  - 넣기: 일차·자리는 장소 넣기와 같은 규칙. 이름·종류·설명·메모·예정 시각·시간대는 보낸 값(없으면 후보 값, 예정 시각 없음, Asia/Seoul), 좌표·장소 서비스 ID는 후보 값.
+  - 넣기: 일차·자리는 장소 넣기와 같은 규칙. 이름·주소·종류·설명·메모·예정 시각·시간대는 보낸 값(없으면 후보 값, 예정 시각 없음, Asia/Seoul), 좌표·장소 서비스 ID는 후보 값.
   - 빼기: 장소 지우기처럼 앞뒤를 잇고 후보는 맨 뒤. 일차·순서·예정 시각·방문·시간대와 닿은 구간의 이동 수단은 사라진다. 사진이 있으면 409(1-3에서 정한다).
 - 여행을 따라간다: 휴지통 여행의 후보는 404, 영구·예약 삭제와 회원 탈퇴 때 Cascade. 후보 하나는 휴지통 없이 바로 지운다.
 

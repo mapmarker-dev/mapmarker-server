@@ -153,6 +153,7 @@ describe('후보 API (e2e)', () => {
         latitude: 33.5065,
         longitude: 126.9535,
         name: '우도',
+        address: '',
         kind: 'other',
         description: '',
         memo: '',
@@ -161,8 +162,9 @@ describe('후보 API (e2e)', () => {
       });
     });
 
-    it('종류·설명·메모·장소 서비스 ID를 함께 넣는다', async () => {
+    it('주소·종류·설명·메모·장소 서비스 ID를 함께 넣는다', async () => {
       const body = candidateBody('카페', {
+        address: '제주특별자치도 제주시 구좌읍 해맞이해안로 1',
         kind: 'food',
         description: '바다 앞',
         memo: '오후에',
@@ -173,6 +175,7 @@ describe('후보 API (e2e)', () => {
       const response = await postCandidate(body).expect(201);
 
       expect(response.body).toMatchObject({
+        address: '제주특별자치도 제주시 구좌읍 해맞이해안로 1',
         kind: 'food',
         description: '바다 앞',
         memo: '오후에',
@@ -211,6 +214,8 @@ describe('후보 API (e2e)', () => {
       ['이름이 빔', { name: '  ' }],
       ['이름이 50자를 넘음', { name: '가'.repeat(51) }],
       ['설명이 1000자를 넘음', { description: '가'.repeat(1001) }],
+      ['주소가 200자를 넘음', { address: '가'.repeat(201) }],
+      ['주소가 null', { address: null }],
       ['좌표가 범위 밖', { latitude: 91 }],
       ['모르는 종류', { kind: 'airport' }],
       ['일차를 보냄', { day: 1 }],
@@ -301,6 +306,28 @@ describe('후보 API (e2e)', () => {
       });
     });
 
+    it('주소를 고치고 빈칸으로 지운다. 좌표는 그대로다', async () => {
+      const body = candidateBody('우도', { address: '제주 우도면' });
+      await postCandidate(body).expect(201);
+
+      await patchCandidate(body.id, { name: '우도 (배)' }).expect(200);
+      expect((await detail()).candidates[0].address).toBe('제주 우도면');
+
+      const changed = await patchCandidate(body.id, {
+        address: '제주특별자치도 제주시 우도면 우도해안길 1',
+      }).expect(200);
+      expect(changed.body).toMatchObject({
+        address: '제주특별자치도 제주시 우도면 우도해안길 1',
+        latitude: 33.5065,
+        longitude: 126.9535,
+      });
+
+      const cleared = await patchCandidate(body.id, { address: '' }).expect(
+        200,
+      );
+      expect(cleared.body).toMatchObject({ address: '' });
+    });
+
     it('장소 서비스 ID는 null로 둘 다 지운다', async () => {
       const body = candidateBody('우도', {
         placeProvider: 'naver',
@@ -329,6 +356,7 @@ describe('후보 API (e2e)', () => {
       await patchCandidate(body.id, { placeId: null }).expect(400);
       await patchCandidate(body.id, { name: null }).expect(400);
       await patchCandidate(body.id, { kind: null }).expect(400);
+      await patchCandidate(body.id, { address: null }).expect(400);
     });
 
     it('넣은 순서는 그대로다', async () => {
@@ -450,8 +478,9 @@ describe('후보 API (e2e)', () => {
       expect(await prisma.candidate.count()).toBe(1);
     });
 
-    it('보낸 값으로 이름·종류·설명·메모·예정 시각·시간대를 정하고, 좌표·장소 서비스 ID는 후보의 것이다', async () => {
+    it('보낸 값으로 이름·주소·종류·설명·메모·예정 시각·시간대를 정하고, 좌표·장소 서비스 ID는 후보의 것이다', async () => {
       const body = candidateBody('우도', {
+        address: '제주 우도면',
         kind: 'tour',
         description: '섬',
         memo: '배',
@@ -464,6 +493,7 @@ describe('후보 API (e2e)', () => {
         day: 2,
         order: 0,
         name: '우도 한 바퀴',
+        address: '제주특별자치도 제주시 우도면 우도해안길 1',
         kind: 'other',
         description: '자전거',
         memo: '',
@@ -475,6 +505,7 @@ describe('후보 API (e2e)', () => {
         id: body.id,
         day: 2,
         name: '우도 한 바퀴',
+        address: '제주특별자치도 제주시 우도면 우도해안길 1',
         kind: 'other',
         description: '자전거',
         memo: '',
@@ -489,6 +520,7 @@ describe('후보 API (e2e)', () => {
 
     it('보내지 않은 값은 후보의 것이다', async () => {
       const body = candidateBody('카페', {
+        address: '제주 구좌읍',
         kind: 'food',
         description: '바다 앞',
         memo: '오후에',
@@ -499,6 +531,7 @@ describe('후보 API (e2e)', () => {
 
       expect((response.body as Detail).stops[0]).toMatchObject({
         name: '카페',
+        address: '제주 구좌읍',
         kind: 'food',
         description: '바다 앞',
         memo: '오후에',
@@ -523,6 +556,7 @@ describe('후보 API (e2e)', () => {
       ['자리가 없음', { day: 1 }],
       ['좌표를 보냄', { day: 1, order: 0, latitude: 33 }],
       ['이름을 null로 보냄', { day: 1, order: 0, name: null }],
+      ['주소를 null로 보냄', { day: 1, order: 0, address: null }],
       ['모르는 예정 시각', { day: 1, order: 0, plannedTime: '25:00' }],
     ])('입력이 틀리면 400이고 후보는 그대로다: %s', async (_, fields) => {
       const ids = await addAll('우도');
@@ -554,6 +588,7 @@ describe('후보 API (e2e)', () => {
       await addAll('비자림');
       await addStop('공항');
       const market = await addStop('시장', 1, {
+        address: '제주특별자치도 제주시 관덕로14길 20',
         kind: 'food',
         description: '야시장',
         memo: '현금',
@@ -585,6 +620,7 @@ describe('후보 API (e2e)', () => {
         latitude: 33.5,
         longitude: 126.5,
         name: '시장',
+        address: '제주특별자치도 제주시 관덕로14길 20',
         kind: 'food',
         description: '야시장',
         memo: '현금',

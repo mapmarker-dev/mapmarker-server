@@ -234,6 +234,7 @@ describe('여행 API (e2e)', () => {
         latitude: 35.1,
         longitude: 129.0,
         name: '광안리',
+        address: '',
         kind: 'food',
         description: '',
         memo: '메모',
