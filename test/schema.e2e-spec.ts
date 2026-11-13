@@ -550,6 +550,60 @@ describe('DB 스키마 (e2e)', () => {
     });
   });
 
+  describe('Candidate', () => {
+    async function createCandidate(
+      tripId: string,
+      data: Partial<Prisma.CandidateUncheckedCreateInput> = {},
+    ) {
+      return prisma.candidate.create({
+        data: {
+          id: randomUUID(),
+          tripId,
+          latitude: 33.5065,
+          longitude: 126.9535,
+          name: '우도',
+          ...data,
+        },
+      });
+    }
+
+    it('기본은 기타·빈 설명과 메모이고, 일차·순서 없이 넣는다', async () => {
+      const trip = await createTrip();
+
+      const candidate = await createCandidate(trip.id);
+
+      expect(candidate).toMatchObject({
+        kind: 'other',
+        description: '',
+        memo: '',
+        placeProvider: null,
+        placeId: null,
+      });
+    });
+
+    it('좌표는 위경도 범위 안이어야 한다', async () => {
+      const trip = await createTrip();
+
+      await expect(
+        createCandidate(trip.id, { latitude: -90.1 }),
+      ).rejects.toThrow('candidates_latitude_check');
+      await expect(
+        createCandidate(trip.id, { longitude: 180.1 }),
+      ).rejects.toThrow('candidates_longitude_check');
+    });
+
+    it('여행을 지우면 후보가 함께 지워진다', async () => {
+      const trip = await createTrip();
+      const kept = await createTrip();
+      await createCandidate(trip.id);
+      await createCandidate(kept.id);
+
+      await prisma.trip.delete({ where: { id: trip.id } });
+
+      expect(await prisma.candidate.count()).toBe(1);
+    });
+  });
+
   describe('삭제 연쇄', () => {
     it('여행을 지우면 장소와 구간이 함께 지워진다', async () => {
       const trip = await createTrip();

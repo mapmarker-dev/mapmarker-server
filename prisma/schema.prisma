@@ -4,7 +4,7 @@
 // 규칙
 // - 테이블·칼럼은 snake_case(@map), Prisma 필드와 API는 앱 모델(mapmarker-app/lib/data/models/)과 같은 camelCase.
 // - 시각은 모두 timestamptz(3). Prisma 기본 DateTime은 시간대 없는 timestamp라서 직접 적는다.
-// - Trip·Stop·Photo의 ID는 앱이 만든 UUID v7을 그대로 받는다(기본값 없음). 나머지는 서버가 만든다.
+// - Trip·Stop·Candidate·Photo의 ID는 앱이 만든 UUID v7을 그대로 받는다(기본값 없음). 나머지는 서버가 만든다.
 // - Prisma가 표현하지 못하는 제약(CHECK, 미룰 수 있는 유일 제약)은 마이그레이션 SQL에 직접 넣었다.
 //   prisma/migrations/*/migration.sql 끝부분 참고.
 
@@ -151,6 +151,7 @@ model Trip {
   copies     Trip[]    @relation("TripCopies")
   stops      Stop[]
   segments   Segment[]
+  candidates Candidate[]
 
   // 여행 목록: 내 여행을 최근에 고친 순서로.
   @@index([userId, updatedAt(sort: Desc)])
@@ -223,6 +224,34 @@ model Segment {
 
   @@index([tripId])
   @@map("segments")
+}
+
+/// 후보 장소. 갈지 말지 정하지 않은 곳을 여행마다 모아 둔다. 동선(일차·순서·구간)에는 들지 않고 사진도 없다.
+/// 장소와 따로 둔 이유: 장소는 일차·순서가 필수이고 동선 규칙과 DB 제약이 그것을 전제한다.
+/// 동선에 넣기·후보로 빼기는 같은 ID로 테이블을 옮긴다. 같은 ID가 장소와 후보에 함께 있지 않게 서비스가 여행 줄을 잠그고 확인한다.
+/// 넣은 순서(createdAt, 같으면 id)로 보여 준다. 후보로 뺀 장소는 그때 만든 것이라 맨 뒤로 간다.
+model Candidate {
+  id            String       @id @db.Uuid
+  tripId        String       @map("trip_id") @db.Uuid
+  /// 위경도 범위 안(CHECK).
+  latitude      Float
+  longitude     Float
+  name          String
+  kind          StopKind     @default(other)
+  /// 사용자가 쓴 설명. 공유하면 보인다.
+  description   String       @default("")
+  /// 작성자의 개인 기록. 공유하면 숨긴다.
+  memo          String       @default("")
+  placeProvider MapProvider? @map("place_provider")
+  placeId       String?      @map("place_id")
+  createdAt     DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt     DateTime     @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  trip Trip @relation(fields: [tripId], references: [id], onDelete: Cascade)
+
+  // 여행의 후보를 넣은 순서로.
+  @@index([tripId, createdAt])
+  @@map("candidates")
 }
 
 /// 장소 사진. 지금은 장소마다 1장이고 서비스가 지킨다(나중에 여러 장으로 늘 수 있다).
