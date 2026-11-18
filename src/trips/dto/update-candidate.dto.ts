@@ -13,6 +13,7 @@ import { CanOmit } from '../../common/can-omit.decorator';
 import { NOT_BLANK } from '../../common/text';
 import { MapProvider, StopKind } from '../../generated/prisma/enums';
 import {
+  ADDRESS_MAX_LENGTH,
   PLACE_ID_MAX_LENGTH,
   STOP_NAME_MAX_LENGTH,
   STOP_TEXT_MAX_LENGTH,
@@ -40,6 +41,12 @@ export class UpdateCandidateDto {
   @Matches(NOT_BLANK, { message: 'name이 비어 있습니다' })
   @MaxLength(STOP_NAME_MAX_LENGTH)
   name?: string;
+
+  @ApiPropertyOptional({ maxLength: ADDRESS_MAX_LENGTH })
+  @CanOmit()
+  @IsString()
+  @MaxLength(ADDRESS_MAX_LENGTH)
+  address?: string;
 
   @ApiPropertyOptional({ enum: StopKind, enumName: 'StopKind' })
   @CanOmit()

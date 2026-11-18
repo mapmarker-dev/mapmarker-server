@@ -20,6 +20,9 @@ export class CandidateResponse {
   @ApiProperty()
   name: string;
 
+  @ApiProperty({ description: '주소. 없으면 빈 문자열' })
+  address: string;
+
   @ApiProperty({ enum: StopKind, enumName: 'StopKind' })
   kind: StopKind;
 
@@ -43,6 +46,7 @@ export function toCandidateResponse(candidate: Candidate): CandidateResponse {
     latitude: candidate.latitude,
     longitude: candidate.longitude,
     name: candidate.name,
+    address: candidate.address,
     kind: candidate.kind,
     description: candidate.description,
     memo: candidate.memo,

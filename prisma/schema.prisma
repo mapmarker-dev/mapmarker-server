@@ -172,6 +172,8 @@ model Stop {
   latitude      Float
   longitude     Float
   name          String
+  /// 주소. 도로명주소 API로 찾은 값이나 사용자가 쓴 값이다. 좌표와 따로 고친다(바꿔도 좌표는 그대로).
+  address       String       @default("")
   kind          StopKind     @default(other)
   /// 사용자가 쓴 설명. 공유하면 보인다.
   description   String       @default("")
@@ -237,6 +239,8 @@ model Candidate {
   latitude      Float
   longitude     Float
   name          String
+  /// 주소. 도로명주소 API로 찾은 값이나 사용자가 쓴 값이다. 좌표와 따로 고친다(바꿔도 좌표는 그대로).
+  address       String       @default("")
   kind          StopKind     @default(other)
   /// 사용자가 쓴 설명. 공유하면 보인다.
   description   String       @default("")

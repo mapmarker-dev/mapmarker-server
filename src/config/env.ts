@@ -45,6 +45,16 @@ export class Env {
   @IsString({ message: 'KAKAO_NATIVE_APP_KEY를 넣어 주세요' })
   @MinLength(1, { message: 'KAKAO_NATIVE_APP_KEY를 넣어 주세요' })
   KAKAO_NATIVE_APP_KEY: string;
+
+  /** 행안부 도로명주소 검색 API 승인키. 비밀값이라 서버에만 둔다. */
+  @IsString({ message: 'JUSO_ADDRESS_KEY를 넣어 주세요' })
+  @MinLength(1, { message: 'JUSO_ADDRESS_KEY를 넣어 주세요' })
+  JUSO_ADDRESS_KEY: string;
+
+  /** 행안부 좌표제공 API 승인키. 도로명주소 검색 API와 따로 받는다. */
+  @IsString({ message: 'JUSO_COORD_KEY를 넣어 주세요' })
+  @MinLength(1, { message: 'JUSO_COORD_KEY를 넣어 주세요' })
+  JUSO_COORD_KEY: string;
 }
 
 /** `ConfigModule`의 `validate`. 값은 환경 변수가 .env보다 우선한다. */

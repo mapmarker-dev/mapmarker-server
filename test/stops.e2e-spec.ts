@@ -178,6 +178,7 @@ describe('장소 API (e2e)', () => {
         latitude: 35.1587,
         longitude: 129.1604,
         name: '해운대',
+        address: '',
         kind: 'other',
         description: '',
         memo: '',
@@ -303,6 +304,28 @@ describe('장소 API (e2e)', () => {
       });
     });
 
+    it('주소를 함께 넣는다', async () => {
+      const route = await add(
+        stopBody('A', 1, 0, {
+          address: '부산광역시 해운대구 해운대해변로 264',
+        }),
+      );
+
+      expect(route.stops[0].address).toBe(
+        '부산광역시 해운대구 해운대해변로 264',
+      );
+    });
+
+    it('주소가 200자를 넘거나 null이면 400', async () => {
+      await postStop(stopBody('A', 1, 0, { address: '가'.repeat(201) })).expect(
+        400,
+      );
+      await postStop(stopBody('A', 1, 0, { address: null })).expect(400);
+      await postStop(stopBody('A', 1, 0, { address: '가'.repeat(200) })).expect(
+        201,
+      );
+    });
+
     it('같은 여행에 동시에 넣어도 순서가 겹치지 않는다 (여행 줄 잠금)', async () => {
       await Promise.all(
         ['A', 'B', 'C', 'D', 'E'].map((name) =>
@@ -348,6 +371,26 @@ describe('장소 API (e2e)', () => {
       expect(after.trip.updatedAt > before.trip.updatedAt).toBe(true);
     });
 
+    it('주소를 고치고 빈칸으로 지운다. 보내지 않으면 그대로다', async () => {
+      const body = stopBody('A', 1, 0, { address: '부산 해운대구 우동' });
+      await add(body);
+
+      await patch(body.id, { name: 'B' }).expect(200);
+      expect((await detail()).stops[0].address).toBe('부산 해운대구 우동');
+
+      const changed = await patch(body.id, {
+        address: '부산광역시 해운대구 해운대해변로 264',
+      }).expect(200);
+      expect(changed.body).toMatchObject({
+        address: '부산광역시 해운대구 해운대해변로 264',
+        latitude: 35.1587,
+        longitude: 129.1604,
+      });
+
+      const cleared = await patch(body.id, { address: '' }).expect(200);
+      expect(cleared.body).toMatchObject({ address: '' });
+    });
+
     it('예정 시각·장소 서비스 ID는 null로 지운다', async () => {
       const body = stopBody('A', 1, 0, {
         plannedTime: '09:30',
@@ -375,6 +418,8 @@ describe('장소 API (e2e)', () => {
       ['null 이름', { name: null }],
       ['null 위도', { latitude: null }],
       ['빈 이름', { name: ' ' }],
+      ['null 주소', { address: null }],
+      ['200자 넘는 주소', { address: '가'.repeat(201) }],
       ['placeProvider 없는 placeId', { placeId: 'p1' }],
     ])('%s는 400', async (_, body) => {
       const { A } = await addAll('A');
