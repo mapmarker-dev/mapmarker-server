@@ -31,11 +31,15 @@ describe('JusoClient', () => {
     buldSlno: 0,
   };
 
-  /** 행안부 API 응답 모양. */
-  function juso(errorCode: string, items: object[] | null = []) {
+  /** 행안부 API 응답 모양. 전체 개수(totalCount)는 받은 줄 수다. */
+  function juso(
+    errorCode: string,
+    items: object[] | null = [],
+    totalCount: unknown = String(items?.length ?? 0),
+  ) {
     return jsonResponse({
       results: {
-        common: { errorCode, errorMessage: '메시지', totalCount: '1' },
+        common: { errorCode, errorMessage: '메시지', totalCount },
         juso: items,
       },
     });
@@ -77,24 +81,50 @@ describe('JusoClient', () => {
         ]),
       );
 
-      await expect(client.searchAddresses('관악대로 472')).resolves.toEqual([
-        {
-          roadAddress: '경기도 안양시 동안구 관악대로 472',
-          roadAddressExtra: '(관양동)',
-          jibunAddress: '경기도 안양시 동안구 관양동 1588',
-          buildingName: null,
-          zipCode: '14054',
-          ref,
-        },
-        {
-          roadAddress: '경기도 안양시 동안구 관악대로 472',
-          roadAddressExtra: null,
-          jibunAddress: '경기도 안양시 동안구 관양동 1588',
-          buildingName: '인덕원빌딩',
-          zipCode: '14054',
-          ref,
-        },
-      ]);
+      await expect(client.searchAddresses('관악대로 472')).resolves.toEqual({
+        addresses: [
+          {
+            roadAddress: '경기도 안양시 동안구 관악대로 472',
+            roadAddressExtra: '(관양동)',
+            jibunAddress: '경기도 안양시 동안구 관양동 1588',
+            buildingName: null,
+            zipCode: '14054',
+            ref,
+          },
+          {
+            roadAddress: '경기도 안양시 동안구 관악대로 472',
+            roadAddressExtra: null,
+            jibunAddress: '경기도 안양시 동안구 관양동 1588',
+            buildingName: '인덕원빌딩',
+            zipCode: '14054',
+            ref,
+          },
+        ],
+        totalCount: 2,
+      });
+    });
+
+    it('행안부의 전체 개수를 돌려준다(받은 10건보다 많을 수 있다)', async () => {
+      fetchMock.mockResolvedValue(
+        juso('0', Array<object>(10).fill(searchItem), '1234'),
+      );
+
+      const result = await client.searchAddresses('강남역');
+
+      expect(result.addresses).toHaveLength(10);
+      expect(result.totalCount).toBe(1234);
+    });
+
+    it('전체 개수가 없거나 숫자가 아니면 받은 줄 수로 본다(더 없음)', async () => {
+      fetchMock.mockResolvedValueOnce(juso('0', [searchItem], undefined));
+      await expect(client.searchAddresses('관악대로 472')).resolves.toEqual(
+        expect.objectContaining({ totalCount: 1 }),
+      );
+
+      fetchMock.mockResolvedValueOnce(juso('0', [searchItem], '많음'));
+      await expect(client.searchAddresses('관악대로 472')).resolves.toEqual(
+        expect.objectContaining({ totalCount: 1 }),
+      );
     });
 
     it('승인키·검색어·JSON·10건을 담아 부른다', async () => {
@@ -116,17 +146,25 @@ describe('JusoClient', () => {
     it('결과가 없으면(juso가 null이어도) 빈 목록', async () => {
       fetchMock.mockResolvedValue(juso('0', null));
 
-      await expect(client.searchAddresses('없는 주소')).resolves.toEqual([]);
+      await expect(client.searchAddresses('없는 주소')).resolves.toEqual({
+        addresses: [],
+        totalCount: 0,
+      });
     });
 
-    it('좌표 조회에 필요한 값이 빠진 줄은 뺀다', async () => {
-      fetchMock.mockResolvedValue(
-        juso('0', [searchItem, { ...searchItem, admCd: undefined }]),
-      );
+    it('좌표 조회에 필요한 값이 빠진 줄은 빼고 전체 개수에서도 뺀다', async () => {
+      const broken = { ...searchItem, admCd: undefined };
+      // 더 없을 때는 전체 개수가 목록 길이와 같아야 앱이 "결과가 많다"고 하지 않는다.
+      fetchMock.mockResolvedValueOnce(juso('0', [searchItem, broken]));
+      await expect(client.searchAddresses('관악대로 472')).resolves.toEqual({
+        addresses: [expect.anything()],
+        totalCount: 1,
+      });
 
-      await expect(
-        client.searchAddresses('관악대로 472'),
-      ).resolves.toHaveLength(1);
+      fetchMock.mockResolvedValueOnce(juso('0', [searchItem, broken], '30'));
+      await expect(client.searchAddresses('관악대로 472')).resolves.toEqual(
+        expect.objectContaining({ totalCount: 29 }),
+      );
     });
 
     it.each(['E0005', 'E0006', 'E0008', 'E0009', 'E0012', 'E0015'])(
@@ -134,7 +172,10 @@ describe('JusoClient', () => {
       async (code) => {
         fetchMock.mockResolvedValue(juso(code, null));
 
-        await expect(client.searchAddresses('서울')).resolves.toEqual([]);
+        await expect(client.searchAddresses('서울')).resolves.toEqual({
+          addresses: [],
+          totalCount: 0,
+        });
       },
     );
 

@@ -67,4 +67,13 @@ export class AddressSearchResponse {
     description: '최대 10건. 없으면 빈 배열',
   })
   addresses: AddressResponse[];
+
+  @ApiProperty({
+    type: 'integer',
+    minimum: 0,
+    example: 1,
+    description:
+      '행안부가 찾은 전체 개수. addresses보다 많으면 결과가 더 있다(앱이 검색어를 좁히라고 안내한다). 더 없으면 addresses의 길이와 같다',
+  })
+  totalCount: number;
 }

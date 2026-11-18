@@ -18,10 +18,10 @@ export class AddressesService {
   async search(text: string): Promise<AddressSearchResponse> {
     const query = cleanAddressQuery(text);
     if (!query) throw new BadRequestException('찾을 주소가 없습니다');
-    return {
-      detail: query.detail,
-      addresses: await this.juso.searchAddresses(query.keyword),
-    };
+    const { addresses, totalCount } = await this.juso.searchAddresses(
+      query.keyword,
+    );
+    return { detail: query.detail, addresses, totalCount };
   }
 
   /** 건물 출입구 좌표. 없으면 404. */

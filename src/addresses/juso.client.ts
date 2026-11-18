@@ -49,14 +49,35 @@ export interface JusoAddress {
   ref: AddressRef;
 }
 
+/** 도로명주소 검색 결과. */
+export interface JusoSearchResult {
+  /** 받은 주소(최대 10건). */
+  addresses: JusoAddress[];
+  /**
+   * 행안부가 찾은 전체 개수. [addresses]보다 많으면 더 있다.
+   * 고를 수 없어 뺀 줄은 여기서도 빼서, 더 없을 때는 [addresses]의 길이와 같다.
+   */
+  totalCount: number;
+}
+
 interface JusoBody {
   results?: {
-    common?: { errorCode?: unknown; errorMessage?: unknown };
+    common?: {
+      errorCode?: unknown;
+      errorMessage?: unknown;
+      totalCount?: unknown;
+    };
     juso?: unknown;
   };
 }
 
 type JusoItem = Record<string, unknown>;
+
+/** API가 준 결과 줄과 전체 개수(없거나 숫자가 아니면 null). */
+interface JusoPage {
+  items: JusoItem[];
+  totalCount: number | null;
+}
 
 /**
  * 행안부 도로명주소 검색 API와 좌표제공 API. 공공데이터(이용허락범위 제한 없음)라 결과를 장소에 저장해도 된다.
@@ -74,22 +95,30 @@ export class JusoClient {
   }
 
   /** [keyword]로 찾은 주소. 검색어가 행안부 기준에 맞지 않으면(너무 짧음 등) 빈 목록이다. */
-  async searchAddresses(keyword: string): Promise<JusoAddress[]> {
-    const items = await this.call(JUSO_SEARCH_URL, {
+  async searchAddresses(keyword: string): Promise<JusoSearchResult> {
+    const { items, totalCount } = await this.call(JUSO_SEARCH_URL, {
       confmKey: this.addressKey,
       currentPage: '1',
       countPerPage: String(SEARCH_COUNT),
       keyword,
       resultType: 'json',
     });
-    return items.map(toAddress).filter((item) => item !== null);
+    const addresses = items.map(toAddress).filter((item) => item !== null);
+    const dropped = items.length - addresses.length;
+    return {
+      addresses,
+      totalCount: Math.max(
+        addresses.length,
+        (totalCount ?? items.length) - dropped,
+      ),
+    };
   }
 
   /** 건물 출입구 좌표(UTM-K, 미터). 없으면 null. */
   async findCoordinate(
     ref: AddressRef,
   ): Promise<{ x: number; y: number } | null> {
-    const items = await this.call(JUSO_COORD_URL, {
+    const { items } = await this.call(JUSO_COORD_URL, {
       confmKey: this.coordKey,
       admCd: ref.admCd,
       rnMgtSn: ref.rnMgtSn,
@@ -109,7 +138,7 @@ export class JusoClient {
   private async call(
     url: string,
     params: Record<string, string>,
-  ): Promise<JusoItem[]> {
+  ): Promise<JusoPage> {
     const name = url === JUSO_SEARCH_URL ? '도로명주소 검색' : '좌표제공';
     let response: Response;
     try {
@@ -139,11 +168,14 @@ export class JusoClient {
     }
     if (code === '0') {
       const items = body?.results?.juso;
-      return Array.isArray(items)
-        ? items.filter(
-            (item): item is JusoItem => typeof item === 'object' && !!item,
-          )
-        : [];
+      return {
+        items: Array.isArray(items)
+          ? items.filter(
+              (item): item is JusoItem => typeof item === 'object' && !!item,
+            )
+          : [],
+        totalCount: toNumber(body?.results?.common?.totalCount),
+      };
     }
     const message = text(body?.results?.common?.errorMessage) ?? '';
     if (UNAVAILABLE_CODES.has(code)) {
@@ -155,7 +187,7 @@ export class JusoClient {
       throw new InternalServerErrorException();
     }
     // 검색어·요청 값이 행안부 기준에 맞지 않는다(예: 시도명만, 한 글자). 찾은 것이 없는 것으로 본다.
-    return [];
+    return { items: [], totalCount: 0 };
   }
 }
 

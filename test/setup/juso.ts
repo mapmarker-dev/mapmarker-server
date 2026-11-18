@@ -4,6 +4,7 @@ import {
   AddressRef,
   JusoAddress,
   JusoClient,
+  JusoSearchResult,
 } from '../../src/addresses/juso.client';
 
 /** 실제 행안부 API 대신 쓰는 가짜 주소 클라이언트. 테스트가 결과를 정하고, 받은 요청을 기억한다. */
@@ -13,6 +14,8 @@ export class FakeJusoClient implements Pick<
 > {
   /** 검색 결과. */
   addresses: JusoAddress[] = [];
+  /** 행안부가 찾은 전체 개수. null이면 [addresses]의 길이(더 없음). */
+  totalCount: number | null = null;
   /** 좌표(UTM-K). null이면 없음. */
   coordinate: { x: number; y: number } | null = null;
   /** true면 행안부에 닿지 못한다(503). */
@@ -21,10 +24,13 @@ export class FakeJusoClient implements Pick<
   readonly keywords: string[] = [];
   readonly refs: AddressRef[] = [];
 
-  searchAddresses(keyword: string): Promise<JusoAddress[]> {
+  searchAddresses(keyword: string): Promise<JusoSearchResult> {
     this.keywords.push(keyword);
     if (this.down) return Promise.reject(new ServiceUnavailableException());
-    return Promise.resolve(this.addresses);
+    return Promise.resolve({
+      addresses: this.addresses,
+      totalCount: this.totalCount ?? this.addresses.length,
+    });
   }
 
   findCoordinate(ref: AddressRef): Promise<{ x: number; y: number } | null> {

@@ -55,6 +55,7 @@ describe('주소 API (e2e)', () => {
     await truncateAll(prisma);
     token = (await createUserWithToken(app)).token;
     juso.addresses = [address];
+    juso.totalCount = null;
     juso.coordinate = { x: 1000000, y: 2000000 };
     juso.down = false;
     juso.keywords.length = 0;
@@ -87,7 +88,31 @@ describe('주소 API (e2e)', () => {
       ).expect(200);
 
       expect(juso.keywords).toEqual(['경기 안양시 동안구 관악대로 472']);
-      expect(response.body).toEqual({ detail: '1,2층', addresses: [address] });
+      expect(response.body).toEqual({
+        detail: '1,2층',
+        addresses: [address],
+        totalCount: 1,
+      });
+    });
+
+    it('결과가 더 있으면 행안부의 전체 개수를 함께 준다', async () => {
+      juso.addresses = Array<JusoAddress>(10).fill(address);
+      juso.totalCount = 1234;
+
+      const response = await search('강남역').expect(200);
+
+      expect(response.body).toEqual(
+        expect.objectContaining({ totalCount: 1234 }),
+      );
+      expect(response.body.addresses).toHaveLength(10);
+    });
+
+    it('정확히 10건이면 전체 개수도 10이다', async () => {
+      juso.addresses = Array<JusoAddress>(10).fill(address);
+
+      const response = await search('관악대로 472').expect(200);
+
+      expect(response.body.totalCount).toBe(10);
     });
 
     it('결과가 없으면 빈 목록이다', async () => {
@@ -95,7 +120,11 @@ describe('주소 API (e2e)', () => {
 
       const response = await search('없는길 1').expect(200);
 
-      expect(response.body).toEqual({ detail: null, addresses: [] });
+      expect(response.body).toEqual({
+        detail: null,
+        addresses: [],
+        totalCount: 0,
+      });
     });
 
     it.each([
