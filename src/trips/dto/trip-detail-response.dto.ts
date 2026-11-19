@@ -9,6 +9,7 @@ import {
   CandidateResponse,
   toCandidateResponse,
 } from './candidate-response.dto';
+import { PhotoResponse } from './photo-dtos';
 import { SegmentResponse, toSegmentResponse } from './segment-response.dto';
 import { StopResponse, toStopResponse } from './stop-response.dto';
 import { toTripResponse, TripResponse } from './trip-response.dto';
@@ -34,13 +35,14 @@ export class TripDetailResponse {
 
 /**
  * [stops]는 동선 순서로, [candidates]는 넣은 순서로 정렬돼 있어야 한다.
- * 구간은 출발 장소의 동선 순서로 맞춘다.
+ * 구간은 출발 장소의 동선 순서로 맞춘다. [photos]는 장소 ID별 사진이다.
  */
 export function toTripDetailResponse(
   trip: Trip,
   stops: Stop[],
   segments: Segment[],
   candidates: Candidate[],
+  photos: ReadonlyMap<string, PhotoResponse>,
 ): TripDetailResponse {
   const position = new Map(stops.map((stop, index) => [stop.id, index]));
   const ordered = [...segments].sort(
@@ -49,7 +51,9 @@ export function toTripDetailResponse(
   );
   return {
     trip: toTripResponse(trip),
-    stops: stops.map(toStopResponse),
+    stops: stops.map((stop) =>
+      toStopResponse(stop, photos.get(stop.id) ?? null),
+    ),
     segments: ordered.map(toSegmentResponse),
     candidates: candidates.map(toCandidateResponse),
   };

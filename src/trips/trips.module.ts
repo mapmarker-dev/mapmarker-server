@@ -1,6 +1,9 @@
 import { Module } from '@nestjs/common';
 import { CandidatesController } from './candidates.controller';
 import { CandidatesService } from './candidates.service';
+import { PhotoLinks } from './photo-links';
+import { PhotosController } from './photos.controller';
+import { PhotosService } from './photos.service';
 import { SegmentsController } from './segments.controller';
 import { SegmentsService } from './segments.service';
 import { StopsController } from './stops.controller';
@@ -10,7 +13,7 @@ import { TrashService } from './trash.service';
 import { TripsController } from './trips.controller';
 import { TripsService } from './trips.service';
 
-/** 여행과 그 동선(장소·구간), 후보, 휴지통. 장소·구간·후보 쓰기도 동선 규칙을 같이 써서 이 모듈에 더한다. */
+/** 여행과 그 동선(장소·구간), 후보, 사진, 휴지통. 장소·구간·후보 쓰기도 동선 규칙을 같이 써서 이 모듈에 더한다. */
 @Module({
   controllers: [
     TripsController,
@@ -18,6 +21,7 @@ import { TripsService } from './trips.service';
     SegmentsController,
     CandidatesController,
     TrashController,
+    PhotosController,
   ],
   providers: [
     TripsService,
@@ -25,6 +29,8 @@ import { TripsService } from './trips.service';
     SegmentsService,
     CandidatesService,
     TrashService,
+    PhotosService,
+    PhotoLinks,
   ],
 })
 export class TripsModule {}

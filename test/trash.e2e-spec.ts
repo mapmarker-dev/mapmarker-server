@@ -249,29 +249,6 @@ describe('휴지통 API (e2e)', () => {
       await removeForever(theirs).expect(404);
       expect(await prisma.trip.count()).toBe(3);
     });
-
-    it('사진이 달린 장소가 있으면 409 (사진·S3를 먼저 지우는 처리는 1-3에서)', async () => {
-      const tripId = await createTrip();
-      const stopId = uuidv7();
-      await api()
-        .post(`/v1/trips/${tripId}/stops`)
-        .set('Authorization', bearer(me.token))
-        .send({
-          id: stopId,
-          day: 1,
-          order: 0,
-          latitude: 35.1,
-          longitude: 129.1,
-          name: 'A',
-        })
-        .expect(201);
-      await prisma.photo.create({
-        data: { id: uuidv7(), stopId, storageKey: 'k.jpg' },
-      });
-      await trash(tripId);
-
-      await removeForever(tripId).expect(409);
-    });
   });
 
   describe('예약 삭제', () => {

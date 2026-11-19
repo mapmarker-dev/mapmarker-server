@@ -11,3 +11,6 @@ process.env.KAKAO_NATIVE_APP_KEY = 'test-kakao-native-app-key';
 // e2e는 행안부 주소 클라이언트를 가짜로 바꿔 끼워서(setup/juso.ts) 이 값으로 실제 API에 붙지 않는다.
 process.env.JUSO_ADDRESS_KEY = 'test-juso-address-key';
 process.env.JUSO_COORD_KEY = 'test-juso-coord-key';
+// e2e는 사진 저장소를 메모리 가짜로 바꿔 끼운다(setup/photo-storage.ts). 실수로 S3에 닿아도 없는 버킷이라 실패한다.
+process.env.S3_PHOTO_BUCKET = 'test-photos-not-a-real-bucket';
+process.env.AWS_PROFILE = '';

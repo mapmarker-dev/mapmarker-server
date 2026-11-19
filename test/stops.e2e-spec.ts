@@ -188,6 +188,7 @@ describe('장소 API (e2e)', () => {
         timeZone: 'Asia/Seoul',
         placeProvider: null,
         placeId: null,
+        photo: null,
       });
     });
 
@@ -489,16 +490,6 @@ describe('장소 API (e2e)', () => {
       expect(route.stops.map((s) => s.order)).toEqual([0, 1]);
       expect(lines(route)).toEqual(['A>C']);
       await remove(B).expect(404);
-    });
-
-    it('사진이 달린 장소는 409 (사진·S3를 먼저 지우는 처리는 1-3에서)', async () => {
-      const { A } = await addAll('A', 'B');
-      await prisma.photo.create({
-        data: { id: uuidv7(), stopId: A, storageKey: 'k.jpg' },
-      });
-
-      await remove(A).expect(409);
-      expect(days(await detail())).toEqual(['1: A B']);
     });
   });
 

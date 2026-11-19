@@ -16,6 +16,7 @@ import {
   plannedTimeData,
   routeStops,
 } from './route-apply';
+import { PhotoLinks } from './photo-links';
 import { lockOwnedTrip } from './trip-lock';
 import { touchTrip } from './trip-touch';
 
@@ -26,7 +27,10 @@ import { touchTrip } from './trip-touch';
  */
 @Injectable()
 export class CandidatesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly links: PhotoLinks,
+  ) {}
 
   /** 같은 ID의 후보는 전역 Prisma 필터가, 같은 ID의 장소는 [ensureNotStop]이 409로 막는다. */
   async create(
@@ -146,7 +150,7 @@ export class CandidatesService {
           placeId: candidate.placeId,
         },
       });
-      return applyRoute(tx, tripId, before, after);
+      return applyRoute(tx, tripId, before, after, this.links);
     });
   }
 

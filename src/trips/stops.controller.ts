@@ -15,6 +15,7 @@ import {
   ApiCreatedResponse,
   ApiNotFoundResponse,
   ApiOkResponse,
+  ApiServiceUnavailableResponse,
   ApiTags,
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
@@ -87,10 +88,12 @@ export class StopsController {
   @ApiOkResponse({
     type: TripDetailResponse,
     description:
-      '새 동선(장소가 같은 ID의 후보가 되어 맨 뒤에 오고, 앞뒤 장소는 새로 이어진다)',
+      '새 동선(장소가 같은 ID의 후보가 되어 맨 뒤에 오고, 앞뒤 장소는 새로 이어진다. 사진은 지운다)',
   })
   @ApiNotFoundResponse({ description: '없거나 다른 사람의 장소' })
-  @ApiConflictResponse({ description: '사진이 달린 장소' })
+  @ApiServiceUnavailableResponse({
+    description: 'S3에 닿지 못해 사진을 지우지 못함(그대로다)',
+  })
   demote(
     @CurrentUser() user: AuthUser,
     @AppIdParam('stopId') stopId: string,
@@ -105,7 +108,9 @@ export class StopsController {
     description: '새 동선(앞뒤 장소가 새로 이어진다)',
   })
   @ApiNotFoundResponse({ description: '없거나 다른 사람의 장소' })
-  @ApiConflictResponse({ description: '사진이 달린 장소' })
+  @ApiServiceUnavailableResponse({
+    description: 'S3에 닿지 못해 사진을 지우지 못함(그대로다)',
+  })
   remove(
     @CurrentUser() user: AuthUser,
     @AppIdParam('stopId') stopId: string,
