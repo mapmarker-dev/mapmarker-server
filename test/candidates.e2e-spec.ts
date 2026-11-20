@@ -630,14 +630,24 @@ describe('후보 API (e2e)', () => {
       expect(body.trip.updatedAt > before).toBe(true);
     });
 
-    it('빼고 다시 넣으면 같은 ID의 장소다(예정 시각은 사라졌다)', async () => {
+    it('빼고 다시 넣으면 같은 ID의 장소다(예정 시각과 방문은 사라졌다)', async () => {
       const market = await addStop('시장', 1, { plannedTime: '18:00' });
+      await api()
+        .patch(`/v1/stops/${market}`)
+        .set('Authorization', bearer(me.token))
+        .send({ visitedAt: '2026-10-21T09:00:00Z' })
+        .expect(200);
 
       await demote(market).expect(200);
       const body = (await promote(market, { day: 1, order: 0 }).expect(200))
         .body as Detail;
 
-      expect(body.stops[0]).toMatchObject({ id: market, plannedTime: null });
+      expect(body.stops[0]).toMatchObject({
+        id: market,
+        plannedTime: null,
+        visited: false,
+        visitedAt: null,
+      });
       expect(body.candidates).toEqual([]);
     });
 

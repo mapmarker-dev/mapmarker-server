@@ -31,7 +31,7 @@ export const TIME_ZONE_MESSAGE =
 /**
  * 장소 넣기. ID는 앱이 만든 UUID v7이다. 같은 곳을 여러 번 넣을 때(연박한 숙소 등)는 ID를 새로 만든다.
  * 일차는 1부터 여행 일수(박 + 1)까지이고 서비스가 여행을 보고 확인한다. 순서가 그 일차의 장소 수보다 크면 맨 뒤에 넣는다.
- * 방문 체크(visited·visitedAt)는 1-4단계에서 받는다.
+ * 방문 체크는 넣을 때 받지 않고 고치기(PATCH의 visitedAt)로만 한다. 새 장소는 방문 전이다.
  */
 export class CreateStopDto {
   @IsAppId()

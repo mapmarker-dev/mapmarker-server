@@ -71,13 +71,14 @@ test/                      *.e2e-spec.ts, setup/(테스트 DB, 환경 변수, �
 - 구간은 장소 API가 만들고 지운다(ID는 서버). 구간 API는 이동 수단·곡률·종류만 고친다. `legs` 상한(5토막, 정류장 99, 5999분)은 앱 `transport_draft.dart`와 같이 바꾼다.
 - 장소·구간·후보·사진을 바꾸면 `touchTrip`으로 여행 `updatedAt`도 바꾼다(목록이 최근에 고친 순서).
 - 장소·후보 주소(`address`)는 빈 문자열이 기본, 200자까지, 좌표와 따로 고친다.
+- **방문 체크**는 `PATCH /v1/stops/:id`의 `visitedAt`(시간대가 붙은 ISO 8601, `@IsInstant()`)만 받는다. null이면 취소이고 `visited`는 서버가 맞춘다(`trips/visit.ts`). 서버 시각보다 하루 넘게 뒤면 400, 방문 전인데 시각이 있으면 CHECK가 막는다. 넣기와 동선에 넣기는 방문 전, 후보로 빼면 방문이 사라진다.
 
 ## 후보
 
-- 후보(`candidates`)는 장소와 따로 된 테이블이다. 일차·순서·구간·사진이 없고 넣은 순서(`CANDIDATE_ORDER`)로 보여 준다. 여행 응답에 함께 오고, 넣기·고치기는 후보 하나만 돌려준다(지우기는 204).
+- 후보(`candidates`)는 장소와 따로 된 테이블이고 넣은 순서(`CANDIDATE_ORDER`)로 보여 준다. 여행 응답에 함께 오고, 넣기·고치기는 후보 하나만 돌려준다(지우기는 204).
 - 한 ID가 장소와 후보에 함께 있으면 안 된다. 여행 줄을 잠그고 `place-checks.ts`의 `ensureNotStop`·`ensureNotCandidate`로 409.
 - **동선에 넣기**(`POST /v1/candidates/:id/stop`)와 **후보로 빼기**(`POST /v1/stops/:id/candidate`)는 같은 ID로 테이블을 옮기는 한 트랜잭션이고 200 + 새 동선이다. 잠근 뒤 옮길 줄을 다시 읽는다(먼저 옮겨졌으면 404).
-  - 넣기: 일차·자리는 장소 넣기와 같다. 이름·주소·종류·설명·메모·예정 시각·시간대는 보낸 값(없으면 후보 값), 좌표·장소 서비스 ID는 후보 값.
+  - 넣기: 자리는 장소 넣기와 같고, 보낸 값이 없으면 후보 값을 쓴다(좌표·장소 서비스 ID는 늘 후보 값).
   - 빼기: 장소 지우기처럼 앞뒤를 잇고 후보는 맨 뒤. 일차·순서·예정 시각·방문·시간대, 닿은 구간의 이동 수단, 사진(S3 파일부터)이 사라진다.
 
 ## 주소 검색
@@ -85,7 +86,7 @@ test/                      *.e2e-spec.ts, setup/(테스트 DB, 환경 변수, �
 - `GET /v1/addresses?query=`와 `/v1/addresses/coordinates`(검색 결과의 `ref`로 좌표). 결과를 DB에 두지 않는다. 행안부 공공데이터만 쓴다(다른 API는 약관이 결과 저장을 막는다).
 - 검색어 다듬기(`address-query.ts`): "대한민국", 괄호 참고 항목, 특수문자, SQL 예약어를 빼고(행안부가 IP를 막을 수 있다), 도로명·건물번호(또는 지번)까지를 검색어로, 뒤를 상세 주소(`detail`)로 나눈다. 건물명이면 뒤의 층·호만 뗀다.
 - 응답은 앞의 10건과 전체 개수 `totalCount`(좌표 키가 없어 뺀 줄은 개수에서도 뺀다). 좌표는 UTM-K라 `utm-k.ts`가 `proj4`(버전 고정)로 바꾼다.
-- 오류: 다듬은 뒤 글이 없으면 400, 검색어 오류(E0005 등)는 빈 결과, 장애·호출 과다(-999, E0007)와 연결 실패·5초 초과는 503, 승인키 오류(E0001, E0014)는 500(로그). 로그에 승인키가 든 주소를 남기지 않는다.
+- 오류: 다듬은 뒤 글이 없으면 400, 검색어 오류는 빈 결과, 장애·호출 과다·연결 실패·5초 초과는 503, 승인키 오류는 500(로그, 코드별 분류는 `juso.client.ts`). 로그에 승인키가 든 주소를 남기지 않는다.
 - 테스트: 단위는 `fetch`를 가짜로, e2e는 `withFakeJuso(builder, fake)`.
 
 ## 휴지통
@@ -97,10 +98,10 @@ test/                      *.e2e-spec.ts, setup/(테스트 DB, 환경 변수, �
 
 ## 사진
 
-- 장소마다 1장(서비스가 지킨다). `POST /v1/stops/:id/photo-uploads`(원본과 썸네일의 PUT 서명 주소 10분, DB에 쓰지 않음) → 앱이 S3에 PUT → `PUT /v1/stops/:id/photo`(파일 확인, 태그 떼기, 등록, 있던 사진은 지움) → 장소 응답. 지우기는 `DELETE /v1/stops/:id/photo`(없어도 204).
+- 장소마다 1장(서비스가 지킨다). `POST /v1/stops/:id/photo-uploads`(원본과 썸네일의 PUT 서명 주소 10분, DB에 쓰지 않음) → 앱이 S3에 PUT → `PUT /v1/stops/:id/photo`(파일 확인, 태그 떼기, 등록, 있던 사진은 지움). 지우기는 `DELETE /v1/stops/:id/photo`(없어도 204).
 - 키(`photo-rules.ts`): `users/{userId}/trips/{tripId}/photos/{photoId}.jpg`와 `_thumb.jpg`, DB에는 원본 키만. 등록된 사진 ID로 업로드 주소를 달라면 409(덮어쓰기 방지).
-- 업로드 주소에는 `image/jpeg`, 바이트 수(원본 5MB, 썸네일 512KB 이하), 태그 `upload=pending`이 서명된다. 버킷 수명 주기 규칙이 이 태그의 파일을 하루 뒤 지운다. 등록 트랜잭션 안에서 태그를 뗀다.
-- 장소 응답의 `photo`(`{ id, url, thumbnailUrl }` 또는 null)는 1시간 GET 서명이고 응답마다 새로 만든다(`PhotoLinks`, `readTripDetail`과 `applyRoute`가 받는다). 1-7에서 CloudFront 서명으로 바꿔도 모양은 같다.
+- 업로드 주소에는 `image/jpeg`, 바이트 수(원본 5MB, 썸네일 512KB 이하), 태그 `upload=pending`이 서명된다. 수명 주기 규칙이 이 태그의 파일을 하루 뒤 지우고, 등록 트랜잭션 안에서 태그를 뗀다.
+- 장소 응답의 `photo`(`{ id, url, thumbnailUrl }` 또는 null)는 1시간 GET 서명이고 응답마다 새로 만든다(`PhotoLinks`). 1-7에서 CloudFront 서명으로 바꿔도 모양은 같다.
 - **사진을 지우는 곳은 모두 `deletePhotos`**(S3 파일부터, 그다음 줄): 사진 지우기·바꾸기, 장소 지우기, 후보로 빼기, 영구·예약 삭제. S3를 부르는 트랜잭션은 `PHOTO_TX_OPTIONS`(15초).
 - S3 클라이언트는 `requestChecksumCalculation: 'WHEN_REQUIRED'`다(기본값이면 서명 주소에 빈 본문 체크섬이 들어가 업로드가 거절된다). 닿지 못하거나 5xx·429는 503, 그 밖의 4xx와 자격 증명 오류는 500(로그).
 - 테스트: 단위는 `client.send`를 가짜로, e2e는 `withFakePhotoStorage(builder, fake)`(`upload()`로 앱의 PUT을 흉내, `down`으로 503). 사진을 만들거나 지우는 e2e는 꼭 끼운다.
@@ -115,7 +116,7 @@ test/                      *.e2e-spec.ts, setup/(테스트 DB, 환경 변수, �
   - 카카오: id_token을 `RemoteJwks`(공개키 캐시)로 RS256 서명·`iss`·`aud`·`exp` 검증. access 토큰용 `JwtService`와 따로 된 인스턴스다.
   - 네이버: access token으로 `GET https://openapi.naver.com/v1/nid/me`(5초). `024`·401이면 401.
   - 제공자를 더할 때: 검증기 + `SocialProvider` enum(마이그레이션) + DTO·경로 + `verifiers`. OIDC 제공자(Apple·구글)는 `RemoteJwks`를 다시 쓴다.
-- **refresh 토큰**: `<세션 ID>.<비밀>`, DB에는 비밀의 SHA-256만. 재발급은 "해시가 맞고 만료 전" 조건부 UPDATE 한 번이고, 바뀌지 않으면 세션을 지우고 401(재사용 = 탈취 의심). 만료는 쓸 때마다 30일 뒤로. 로그아웃은 지금 토큰과 맞을 때만 지우고 항상 204.
+- **refresh 토큰**: `<세션 ID>.<비밀>`, DB에는 비밀의 SHA-256만. 재발급은 "해시가 맞고 만료 전" 조건부 UPDATE 한 번이고, 바뀌지 않으면 세션을 지우고 401(재사용 = 탈취 의심). 로그아웃은 지금 토큰과 맞을 때만 지우고 항상 204.
 - **테스트:** 단위는 `test/setup/signing-keys.ts`의 RSA 키와 `jest.spyOn(globalThis, 'fetch')`. e2e는 `withFakeSocialProviders(builder)`(토큰 `ok:<id>:<닉네임>`·`down`), 토큰만 필요하면 `createUserWithToken(app)`·`createUserWithSession(app)`.
 
 ## Prisma

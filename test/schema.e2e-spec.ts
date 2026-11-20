@@ -410,6 +410,17 @@ describe('DB 스키마 (e2e)', () => {
         'stops_longitude_check',
       );
     });
+
+    it('방문 전인 장소에는 방문 시각이 없다. 방문했으면 시각이 없어도 된다', async () => {
+      const trip = await createTrip();
+
+      await expect(
+        createStop(trip.id, { visited: false, visitedAt: new Date() }),
+      ).rejects.toThrow('stops_visited_at_check');
+      await expect(
+        createStop(trip.id, { order: 1, visited: true, visitedAt: null }),
+      ).resolves.toMatchObject({ visited: true, visitedAt: null });
+    });
   });
 
   describe('Segment', () => {

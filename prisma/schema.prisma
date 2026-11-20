@@ -181,8 +181,9 @@ model Stop {
   memo          String       @default("")
   /// 예정 시각. 날짜 없이 timeZone 기준 현지 시:분이다(날짜 = 시작일 + 일차 − 1).
   plannedTime   DateTime?    @map("planned_time") @db.Time(0)
+  /// 방문했는지. API는 visitedAt만 받고 이 값을 맞춘다. 방문 전이면 visitedAt이 없다(CHECK).
   visited       Boolean      @default(false)
-  /// 실제로 방문한 순간.
+  /// 실제로 방문한 순간. 현지 시각은 timeZone으로 보여 준다.
   visitedAt     DateTime?    @map("visited_at") @db.Timestamptz(3)
   /// IANA 시간대 이름. 예: Asia/Seoul, Europe/Paris.
   timeZone      String       @default("Asia/Seoul") @map("time_zone")
