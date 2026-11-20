@@ -11,6 +11,7 @@ import {
   Min,
 } from 'class-validator';
 import { CanOmit } from '../../common/can-omit.decorator';
+import { IsInstant } from '../../common/instant';
 import { IsLocalTime } from '../../common/local-time';
 import { NOT_BLANK } from '../../common/text';
 import { MapProvider, StopKind } from '../../generated/prisma/enums';
@@ -24,7 +25,8 @@ import {
 
 /**
  * 장소 고치기. 보낸 필드만 바꾼다. 일차와 순서는 받지 않는다(옮기기는 PUT /v1/stops/:stopId/position).
- * 예정 시각과 장소 서비스 ID는 null로 지우고, 나머지는 null을 받지 않는다.
+ * 예정 시각, 방문 시각, 장소 서비스 ID는 null로 지우고, 나머지는 null을 받지 않는다.
+ * 방문 여부(visited)는 받지 않고 방문 시각으로 맞춘다.
  */
 export class UpdateStopDto {
   @ApiPropertyOptional({ minimum: -90, maximum: 90 })
@@ -86,6 +88,18 @@ export class UpdateStopDto {
   @IsString()
   @IsTimeZone({ message: TIME_ZONE_MESSAGE })
   timeZone?: string;
+
+  @ApiPropertyOptional({
+    type: String,
+    format: 'date-time',
+    nullable: true,
+    example: '2026-10-21T05:42:00.000Z',
+    description:
+      '방문한 순간(시간대가 붙은 ISO 8601). 보내면 방문, null이면 방문 취소. visited는 이 값으로 맞춘다. 서버 시각보다 하루 넘게 뒤면 400',
+  })
+  @IsOptional()
+  @IsInstant()
+  visitedAt?: string | null;
 
   @ApiPropertyOptional({
     enum: MapProvider,

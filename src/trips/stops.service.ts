@@ -19,6 +19,7 @@ import {
 import { lockOwnedTrip } from './trip-lock';
 import { PHOTO_ORDER } from './trip-detail';
 import { touchTrip } from './trip-touch';
+import { visitData } from './visit';
 
 /**
  * 장소. 넣기·옮기기·지우기·후보로 빼기는 동선(순서와 구간)을 바꾸므로, 여행 줄을 잠근 트랜잭션에서
@@ -78,7 +79,7 @@ export class StopsService {
     });
   }
 
-  /** 이름·좌표·설명 등을 바꾼다. 동선 자리는 그대로라 장소 하나만 돌려준다. */
+  /** 이름·좌표·설명·방문 시각 등을 바꾼다. 동선 자리는 그대로라 장소 하나만 돌려준다. */
   async update(
     userId: string,
     stopId: string,
@@ -89,10 +90,12 @@ export class StopsService {
       dto.placeProvider === undefined ? stop.placeProvider : dto.placeProvider,
       dto.placeId === undefined ? stop.placeId : dto.placeId,
     );
+    const visit = visitData(dto.visitedAt, new Date());
     return this.prisma.$transaction(async (tx) => {
       const updated = await tx.stop.update({
         where: { id: stopId },
         data: {
+          ...visit,
           latitude: dto.latitude,
           longitude: dto.longitude,
           name: dto.name,

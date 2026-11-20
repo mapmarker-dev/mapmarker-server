@@ -1,14 +1,14 @@
 # HANDOFF
 
-> 최종 갱신: 2026-11-19 · 브랜치: dev
+> 최종 갱신: 2026-11-20 · 브랜치: dev
 
 ## 지금 하는 일
 
-**1-3 사진**이 끝났다(규칙은 `CLAUDE.md` "사진"). 앱과 함께 실기기와 실제 S3로 확인했고 dev → main PR을 열 차례다. 썸네일은 앱에서 사용자가 고른 정사각형이고, 서버는 크기와 형식만 본다.
+**1-4 여행 중 기능은 끝났다**(서버 몫은 방문 체크, 앱과 실기기 확인까지 마침. 결정은 OVERVIEW "여행 중"). 다음 1-5 이미지 내보내기는 앱만 바뀌어 서버 일이 없다.
 
 ## 다음에 할 첫 단계
 
-1. dev → main PR(merge commit). 다음 단위는 PLAN 1-4 여행 중 기능(방문 체크 칸 `visited`·`visitedAt`·`timeZone`은 이미 있다).
+1. 다음 서버 일은 1-6 회원 탈퇴다(아래 "다음 단위로 넘길 것"). 다른 컴퓨터에서 받으면 마이그레이션 `stop_visit_check` 때문에 `npm run db:migrate`를 먼저 돌린다.
 
 ## 다음 단위로 넘길 것
 
@@ -17,12 +17,13 @@
 
 ## 현재 상태
 
-- lint, 형식, 단위 163개, 빌드, e2e 301개 통과. e2e마다 pg `client.query()` DeprecationWarning이 한 번 나온다(Prisma 어댑터 문제).
+- lint, 형식, 단위 171개, 빌드, e2e 310개 통과. e2e마다 pg `client.query()` DeprecationWarning이 한 번 나온다(Prisma 어댑터 문제).
 - Prisma 7(어댑터) 오류 코드: 유일 위반 P2002, Restrict P2003, 대상 없음 P2025, CHECK 위반 P2039.
 - `npm audit --omit=dev`: high 3건(`body-parser`, `multer` ← `@nestjs/platform-express`, DoS). 따로 고친다.
 
 ## 아직 문서에 없는 결정
 
+- **방문 체크:** 전용 경로(`PUT/DELETE /visit`)는 두지 않았다. 시간대는 따로 받지 않는다(1단계 장소는 늘 `Asia/Seoul`). 하루 넘는 미래를 막는 것은 기기 시계가 틀린 경우 때문이다. 나머지 규칙은 OVERVIEW "여행 중".
 - **사진**
   - 등록은 같은 장소에 같은 ID면 그대로 200, 지우기는 사진이 없어도 204다(앱이 다시 저장으로 둘 다 보내도 되게).
   - S3를 DB 트랜잭션 안에서 부른다. S3가 실패하면 되돌아가 다시 하면 되고, 커밋만 실패하는 드문 경우는 그대로 둔다.

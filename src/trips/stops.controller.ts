@@ -59,7 +59,10 @@ export class StopsController {
   @Patch('stops/:stopId')
   @ApiAppIdParam('stopId')
   @ApiOkResponse({ type: StopResponse })
-  @ApiBadRequestResponse({ description: '입력이 틀림(일차·순서는 받지 않음)' })
+  @ApiBadRequestResponse({
+    description:
+      '입력이 틀림(일차·순서·visited는 받지 않음, 방문 시각이 하루 넘게 미래)',
+  })
   @ApiNotFoundResponse({ description: '없거나 다른 사람의 장소' })
   update(
     @CurrentUser() user: AuthUser,

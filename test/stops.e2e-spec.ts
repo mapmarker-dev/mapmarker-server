@@ -274,7 +274,8 @@ describe('장소 API (e2e)', () => {
       ['placeProvider 없는 placeId', { placeId: 'p1' }],
       ['placeId 없는 placeProvider', { placeProvider: 'naver' }],
       ['UUID v4 ID', { id: randomUUID() }],
-      ['방문 체크(1-4에서 받는다)', { visited: true }],
+      ['방문 여부(고치기의 visitedAt으로만 바꾼다)', { visited: true }],
+      ['방문 시각(고치기로만 받는다)', { visitedAt: '2026-10-21T05:42:00Z' }],
       ['모르는 필드', { color: 'red' }],
     ])('%s는 400', async (_, fields) => {
       await postStop({ ...stopBody('A', 1, 0), ...fields }).expect(400);
@@ -413,9 +414,65 @@ describe('장소 API (e2e)', () => {
       });
     });
 
+    it('방문 시각을 보내면 방문, null이면 방문 취소다. 다른 필드만 보내면 그대로다', async () => {
+      const { A } = await addAll('A');
+
+      const visited = await patch(A, {
+        visitedAt: '2026-10-21T14:42:00+09:00',
+      }).expect(200);
+      expect(visited.body).toMatchObject({
+        visited: true,
+        visitedAt: '2026-10-21T05:42:00.000Z',
+        timeZone: 'Asia/Seoul',
+      });
+
+      await patch(A, { memo: '맛있었다' }).expect(200);
+      expect((await detail()).stops[0]).toMatchObject({
+        visited: true,
+        visitedAt: '2026-10-21T05:42:00.000Z',
+      });
+
+      const before = await detail();
+      const cancelled = await patch(A, { visitedAt: null }).expect(200);
+      expect(cancelled.body).toMatchObject({ visited: false, visitedAt: null });
+      expect((await detail()).trip.updatedAt > before.trip.updatedAt).toBe(
+        true,
+      );
+    });
+
+    it('방문 시각을 이름과 함께 고친다 (장소 편집에서 날짜와 시각을 바꾼다)', async () => {
+      const { A } = await addAll('A');
+      await patch(A, { visitedAt: '2026-10-21T05:42:00Z' }).expect(200);
+
+      const response = await patch(A, {
+        name: '대릉원',
+        visitedAt: '2026-10-20T01:00:00Z',
+      }).expect(200);
+
+      expect(response.body).toMatchObject({
+        name: '대릉원',
+        visited: true,
+        visitedAt: '2026-10-20T01:00:00.000Z',
+      });
+    });
+
+    it('서버 시각보다 하루까지 뒤인 방문 시각은 받고, 그보다 뒤면 400이다', async () => {
+      const { A } = await addAll('A');
+      const inHours = (hours: number) =>
+        new Date(Date.now() + hours * 60 * 60 * 1000).toISOString();
+
+      await patch(A, { visitedAt: inHours(23) }).expect(200);
+      await patch(A, { visitedAt: inHours(25) }).expect(400);
+      expect((await detail()).stops[0].visited).toBe(true);
+    });
+
     it.each([
       ['일차', { day: 2 }],
       ['순서', { order: 0 }],
+      ['방문 여부', { visited: true }],
+      ['시간대 없는 방문 시각', { visitedAt: '2026-10-21T05:42:00' }],
+      ['날짜만 있는 방문 시각', { visitedAt: '2026-10-21' }],
+      ['숫자 방문 시각', { visitedAt: 1761025320000 }],
       ['null 이름', { name: null }],
       ['null 위도', { latitude: null }],
       ['빈 이름', { name: ' ' }],
