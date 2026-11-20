@@ -10,6 +10,7 @@ import { TripDetailResponse } from './dto/trip-detail-response.dto';
 import { toTripResponse, TripResponse } from './dto/trip-response.dto';
 import { UpdateTripDto } from './dto/update-trip.dto';
 import { checkTripDates, TripDates } from './trip-dates';
+import { PhotoLinks } from './photo-links';
 import { readTripDetail } from './trip-detail';
 import { lockOwnedTrip } from './trip-lock';
 
@@ -20,7 +21,10 @@ import { lockOwnedTrip } from './trip-lock';
  */
 @Injectable()
 export class TripsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly links: PhotoLinks,
+  ) {}
 
   /** 내 여행 목록(휴지통 빼고). 최근에 고친 여행이 앞에 온다. */
   async list(userId: string): Promise<TripResponse[]> {
@@ -52,11 +56,15 @@ export class TripsService {
   }
 
   async get(userId: string, tripId: string): Promise<TripDetailResponse> {
-    const detail = await readTripDetail(this.prisma, {
-      id: tripId,
-      userId,
-      deletedAt: null,
-    });
+    const detail = await readTripDetail(
+      this.prisma,
+      {
+        id: tripId,
+        userId,
+        deletedAt: null,
+      },
+      this.links,
+    );
     if (!detail) throw new NotFoundException();
     return detail;
   }

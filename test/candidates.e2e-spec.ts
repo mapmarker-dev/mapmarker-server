@@ -641,23 +641,6 @@ describe('후보 API (e2e)', () => {
       expect(body.candidates).toEqual([]);
     });
 
-    it('사진이 달린 장소는 409이고 그대로다', async () => {
-      const market = await addStop('시장');
-      await prisma.photo.create({
-        data: {
-          id: uuidv7(),
-          stopId: market,
-          storageKey: `users/${me.userId}/trips/${tripId}/photos/1.jpg`,
-        },
-      });
-
-      await demote(market).expect(409);
-
-      const body = await detail();
-      expect(route(body)).toEqual(['시장@1']);
-      expect(body.candidates).toEqual([]);
-    });
-
     it('없는 장소, 남의 장소, 이미 뺀 장소는 404', async () => {
       const market = await addStop('시장');
       await demote(market).expect(200);

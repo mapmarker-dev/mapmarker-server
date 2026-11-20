@@ -2,6 +2,7 @@ import { BadRequestException } from '@nestjs/common';
 import { parseLocalTime } from '../common/local-time';
 import type { Prisma } from '../generated/prisma/client';
 import { TripDetailResponse } from './dto/trip-detail-response.dto';
+import type { PhotoLinks } from './photo-links';
 import { diffSegments, RouteStop } from './route';
 import { readTripDetail } from './trip-detail';
 import { touchTrip } from './trip-touch';
@@ -47,6 +48,7 @@ export async function applyRoute(
   tripId: string,
   before: readonly RouteStop[],
   after: readonly RouteStop[],
+  links: PhotoLinks,
 ): Promise<TripDetailResponse> {
   const previous = new Map(before.map((stop) => [stop.id, stop]));
   for (const stop of after) {
@@ -74,5 +76,5 @@ export async function applyRoute(
   }
 
   await touchTrip(tx, tripId);
-  return (await readTripDetail(tx, { id: tripId }))!;
+  return (await readTripDetail(tx, { id: tripId }, links))!;
 }

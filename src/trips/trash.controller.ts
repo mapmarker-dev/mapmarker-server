@@ -8,10 +8,10 @@ import {
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
-  ApiConflictResponse,
   ApiNoContentResponse,
   ApiNotFoundResponse,
   ApiOkResponse,
+  ApiServiceUnavailableResponse,
   ApiTags,
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
@@ -64,7 +64,9 @@ export class TrashController {
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiNoContentResponse({ description: '장소·구간도 함께 영구 삭제한다' })
   @ApiNotFoundResponse({ description: NOT_IN_TRASH })
-  @ApiConflictResponse({ description: '사진이 달린 장소가 있음' })
+  @ApiServiceUnavailableResponse({
+    description: 'S3에 닿지 못해 사진을 지우지 못함(휴지통에 그대로다)',
+  })
   remove(
     @CurrentUser() user: AuthUser,
     @TripId() tripId: string,

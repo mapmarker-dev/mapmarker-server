@@ -4,6 +4,7 @@ import { plainToInstance } from 'class-transformer';
 import {
   IsEnum,
   IsInt,
+  IsOptional,
   IsString,
   Matches,
   Max,
@@ -55,6 +56,24 @@ export class Env {
   @IsString({ message: 'JUSO_COORD_KEY를 넣어 주세요' })
   @MinLength(1, { message: 'JUSO_COORD_KEY를 넣어 주세요' })
   JUSO_COORD_KEY: string;
+
+  /** 사진 버킷의 리전. */
+  @IsString()
+  @MinLength(1)
+  AWS_REGION: string = 'ap-northeast-2';
+
+  /**
+   * `~/.aws/credentials`의 프로필 이름(로컬 개발). 키는 프로젝트 밖에 둔다.
+   * 비우면 AWS 기본 순서(환경 변수, 기본 프로필, EC2 역할)로 찾는다. 운영(1-7)은 EC2 역할이라 비운다.
+   */
+  @IsOptional()
+  @IsString()
+  AWS_PROFILE?: string;
+
+  /** 사진 버킷 이름. 값이 틀려도 서버는 뜨고 사진 요청만 실패한다. */
+  @IsString({ message: 'S3_PHOTO_BUCKET을 넣어 주세요' })
+  @MinLength(1, { message: 'S3_PHOTO_BUCKET을 넣어 주세요' })
+  S3_PHOTO_BUCKET: string;
 }
 
 /** `ConfigModule`의 `validate`. 값은 환경 변수가 .env보다 우선한다. */

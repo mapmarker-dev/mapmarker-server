@@ -10,6 +10,7 @@ describe('validateEnv', () => {
     KAKAO_NATIVE_APP_KEY: 'kakao-app-key',
     JUSO_ADDRESS_KEY: 'juso-address-key',
     JUSO_COORD_KEY: 'juso-coord-key',
+    S3_PHOTO_BUCKET: 'photos-bucket',
   };
 
   it('빠진 값은 기본값을 쓰고, 문자열 포트는 숫자로 바꾼다', () => {
@@ -18,7 +19,9 @@ describe('validateEnv', () => {
       PORT: 3000,
       DATABASE_URL: databaseUrl,
       JWT_ACCESS_SECRET: jwtSecret,
+      AWS_REGION: 'ap-northeast-2',
     });
+    expect(validateEnv(required).AWS_PROFILE).toBeUndefined();
     expect(validateEnv({ ...required, PORT: '4000' }).PORT).toBe(4000);
   });
 
@@ -52,7 +55,7 @@ describe('validateEnv', () => {
     ).toThrow('KAKAO_NATIVE_APP_KEY');
   });
 
-  it.each(['JUSO_ADDRESS_KEY', 'JUSO_COORD_KEY'] as const)(
+  it.each(['JUSO_ADDRESS_KEY', 'JUSO_COORD_KEY', 'S3_PHOTO_BUCKET'] as const)(
     '%s가 없거나 비어 있으면 서버를 띄우지 않는다',
     (key) => {
       const without: Record<string, string> = { ...required };

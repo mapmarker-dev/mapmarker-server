@@ -3,6 +3,7 @@ import { ApiIdProperty } from '../../common/app-id';
 import { formatLocalTime } from '../../common/local-time';
 import type { Stop } from '../../generated/prisma/client';
 import { MapProvider, StopKind } from '../../generated/prisma/enums';
+import { PhotoResponse } from './photo-dtos';
 
 /** 장소. 필드 이름과 모양은 앱 모델(Stop)과 같다. */
 export class StopResponse {
@@ -61,9 +62,19 @@ export class StopResponse {
 
   @ApiProperty({ type: String, nullable: true })
   placeId: string | null;
+
+  @ApiProperty({
+    type: PhotoResponse,
+    nullable: true,
+    description: '사진(지금은 장소마다 1장). 없으면 null',
+  })
+  photo: PhotoResponse | null;
 }
 
-export function toStopResponse(stop: Stop): StopResponse {
+export function toStopResponse(
+  stop: Stop,
+  photo: PhotoResponse | null,
+): StopResponse {
   return {
     id: stop.id,
     tripId: stop.tripId,
@@ -82,5 +93,6 @@ export function toStopResponse(stop: Stop): StopResponse {
     timeZone: stop.timeZone,
     placeProvider: stop.placeProvider,
     placeId: stop.placeId,
+    photo,
   };
 }
