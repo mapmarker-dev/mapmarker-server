@@ -1,15 +1,20 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { PhotoStorage } from '../storage/photo-storage';
 import { CreateStopDto } from './dto/create-stop.dto';
 import { MoveStopDto } from './dto/move-stop.dto';
+import { OrderDayDto } from './dto/order-day.dto';
 import { StopResponse, toStopResponse } from './dto/stop-response.dto';
 import { TripDetailResponse } from './dto/trip-detail-response.dto';
 import { UpdateStopDto } from './dto/update-stop.dto';
 import { PhotoLinks } from './photo-links';
 import { PHOTO_TX_OPTIONS, releasePhotos } from './photo-rules';
 import { checkPlace, ensureNotCandidate } from './place-checks';
-import { placeStop, removeStop } from './route';
+import { orderDay, placeStop, removeStop } from './route';
 import {
   applyRoute,
   checkDay,
@@ -141,6 +146,30 @@ export class StopsService {
         placeStop(before, stop, dto.day, dto.order),
         this.links,
       );
+    });
+  }
+
+  /**
+   * [dto.day]일차의 장소를 보낸 순서로 늘어놓고 구간을 다시 잇는다. 새 순서에서도 이웃인 쌍의 구간은
+   * 남는다(장소를 하나씩 옮기면 중간에 이웃이 끊겨 이동 수단이 지워질 수 있다).
+   * 보낸 ID가 그 일차의 장소와 같은 집합이 아니면 409다(그사이 다른 기기에서 바뀌었다).
+   */
+  async orderDay(
+    userId: string,
+    tripId: string,
+    dto: OrderDayDto,
+  ): Promise<TripDetailResponse> {
+    return this.prisma.$transaction(async (tx) => {
+      const { nights } = await lockOwnedTrip(tx, userId, tripId);
+      checkDay(nights, dto.day);
+      const before = await routeStops(tx, tripId);
+      const after = orderDay(before, dto.day, dto.stopIds);
+      if (!after) {
+        throw new ConflictException(
+          'stopIds가 그 일차의 장소와 다릅니다. 동선을 다시 받아 보내야 합니다',
+        );
+      }
+      return applyRoute(tx, tripId, before, after, this.links);
     });
   }
 

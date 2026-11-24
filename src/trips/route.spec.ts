@@ -1,5 +1,6 @@
 import {
   diffSegments,
+  orderDay,
   placeStop,
   removeStop,
   RouteSegment,
@@ -80,6 +81,39 @@ describe('동선 규칙', () => {
         order: 0,
         name: '해운대',
       });
+    });
+  });
+
+  describe('orderDay: 그날 순서를 통째로 바꾸기', () => {
+    const route = [
+      stop('s'),
+      stop('a', 2, 0),
+      stop('b', 2, 1),
+      stop('c', 2, 2),
+      stop('d', 2, 3),
+      stop('e', 3, 0),
+    ];
+
+    it('그 일차만 보낸 순서로 늘어놓고 순서를 다시 매긴다', () => {
+      const next = orderDay(route, 2, ['c', 'd', 'a', 'b'])!;
+
+      expect(days(next)).toEqual(['1: s', '2: c d a b', '3: e']);
+      expect(orders(next)).toEqual([0, 0, 1, 2, 3, 0]);
+    });
+
+    it('그 일차의 장소와 같은 집합이 아니면 null이다 (빠짐, 덤, 겹침, 다른 일차 장소)', () => {
+      expect(orderDay(route, 2, ['a', 'b', 'c'])).toBeNull();
+      expect(orderDay(route, 2, ['a', 'b', 'c', 'd', 'x'])).toBeNull();
+      expect(orderDay(route, 2, ['a', 'b', 'c', 'c'])).toBeNull();
+      expect(orderDay(route, 2, ['a', 'b', 'c', 'e'])).toBeNull();
+    });
+
+    it('빈 일차에 빈 순서를 보내면 그대로다', () => {
+      expect(days(orderDay(route, 4, [])!)).toEqual([
+        '1: s',
+        '2: a b c d',
+        '3: e',
+      ]);
     });
   });
 

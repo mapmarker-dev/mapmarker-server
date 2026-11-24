@@ -24,14 +24,15 @@ import { CurrentUser } from '../auth/current-user.decorator';
 import { ApiAppIdParam, AppIdParam } from '../common/app-id';
 import { CreateStopDto } from './dto/create-stop.dto';
 import { MoveStopDto } from './dto/move-stop.dto';
+import { OrderDayDto } from './dto/order-day.dto';
 import { StopResponse } from './dto/stop-response.dto';
 import { TripDetailResponse } from './dto/trip-detail-response.dto';
 import { UpdateStopDto } from './dto/update-stop.dto';
 import { StopsService } from './stops.service';
 
 /**
- * 장소. 넣기는 여행 아래(/v1/trips/:tripId/stops), 나머지는 장소 ID로(/v1/stops/:stopId) 부른다.
- * 동선이 바뀌는 요청(넣기·옮기기·지우기·후보로 빼기)은 여행의 새 동선 전체를 돌려준다.
+ * 장소. 넣기와 그날 순서 바꾸기는 여행 아래(/v1/trips/:tripId/stops, stop-order), 나머지는 장소 ID로(/v1/stops/:stopId) 부른다.
+ * 동선이 바뀌는 요청(넣기·옮기기·그날 순서·지우기·후보로 빼기)은 여행의 새 동선 전체를 돌려준다.
  */
 @ApiTags('stops')
 @ApiBearerAuth()
@@ -83,6 +84,25 @@ export class StopsController {
     @Body() dto: MoveStopDto,
   ): Promise<TripDetailResponse> {
     return this.stopsService.move(user.id, stopId, dto);
+  }
+
+  @Put('trips/:tripId/stop-order')
+  @ApiAppIdParam('tripId')
+  @ApiOkResponse({ type: TripDetailResponse, description: '새 동선' })
+  @ApiBadRequestResponse({
+    description: '입력이 틀림(여행 일수 밖의 일차, 겹친 ID 포함)',
+  })
+  @ApiNotFoundResponse({ description: '없거나 다른 사람의 여행' })
+  @ApiConflictResponse({
+    description:
+      'stopIds가 그 일차의 장소와 다름(그사이 바뀜). 동선은 그대로다',
+  })
+  orderDay(
+    @CurrentUser() user: AuthUser,
+    @AppIdParam('tripId') tripId: string,
+    @Body() dto: OrderDayDto,
+  ): Promise<TripDetailResponse> {
+    return this.stopsService.orderDay(user.id, tripId, dto);
   }
 
   @Post('stops/:stopId/candidate')
