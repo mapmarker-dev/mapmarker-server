@@ -1,10 +1,10 @@
 # HANDOFF
 
-> 최종 갱신: 2026-11-23 · 브랜치: dev
+> 최종 갱신: 2026-11-24 · 브랜치: dev
 
 ## 지금 하는 일
 
-**1-5 후속 "사진 방향"의 서버 몫을 마쳤다**(장소 `photoSide` 칸, 마이그레이션 `stop_photo_side`). 앱과 함께 실기기 확인까지 마쳤다(다음은 문서 정리). 1-5 이미지 내보내기는 앱만 바뀌었다.
+**1-5 후속 "사진 방향"의 서버 몫을 마쳤다**(장소 `photoSide` 칸, 마이그레이션 `stop_photo_side`, 실기기 확인 끝). 이어서 "같은 자리 장소는 사진 하나"를 위해 장소 지우기와 후보로 빼기에서 사진을 같은 자리 장소로 넘기게 했다(`releasePhotos`, 실기기 확인 끝). 1-5 이미지 내보내기는 앱만 바뀌었다.
 
 ## 다음에 할 첫 단계
 
@@ -18,7 +18,7 @@
 
 ## 현재 상태
 
-- lint, 형식, 단위 171개, 빌드, e2e 311개 통과. e2e마다 pg `client.query()` DeprecationWarning이 한 번 나온다(Prisma 어댑터 문제).
+- lint, 형식, 단위 171개, 빌드, e2e 314개 통과. e2e마다 pg `client.query()` DeprecationWarning이 한 번 나온다(Prisma 어댑터 문제).
 - Prisma 7(어댑터) 오류 코드: 유일 위반 P2002, Restrict P2003, 대상 없음 P2025, CHECK 위반 P2039.
 - `npm audit --omit=dev`: high 3건(`body-parser`, `multer` ← `@nestjs/platform-express`, DoS). 따로 고친다.
 

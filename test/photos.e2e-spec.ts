@@ -76,12 +76,17 @@ describe('사진 API (e2e)', () => {
     return id;
   }
 
-  async function addStop(name: string, trip = tripId): Promise<string> {
+  /** 장소를 1일차 맨 뒤에 넣는다. 좌표를 주지 않으면 모두 같은 자리다. */
+  async function addStop(
+    name: string,
+    trip = tripId,
+    place = { latitude: 35.1, longitude: 129.1 },
+  ): Promise<string> {
     const id = uuidv7();
     await api()
       .post(`/v1/trips/${trip}/stops`)
       .set('Authorization', bearer(me.token))
-      .send({ id, day: 1, order: 99, latitude: 35.1, longitude: 129.1, name })
+      .send({ id, day: 1, order: 99, ...place, name })
       .expect(201);
     return id;
   }
@@ -479,6 +484,68 @@ describe('사진 API (e2e)', () => {
 
       expect(body.stops).toEqual([]);
       expect(body.candidates.map((c) => c.id)).toEqual([a]);
+      expect(storage.keys()).toEqual([]);
+      expect(await prisma.photo.count()).toBe(0);
+    });
+
+    it('같은 자리 장소가 남으면 지운 장소의 사진과 방향을 그 장소로 넘긴다 (연박 숙소)', async () => {
+      const first = await addStop('숙소');
+      const second = await addStop('숙소');
+      const photoId = await attach(first);
+      await api()
+        .patch(`/v1/stops/${first}`)
+        .set('Authorization', bearer(me.token))
+        .send({ photoSide: 'left' })
+        .expect(200);
+
+      const body = (
+        await api()
+          .delete(`/v1/stops/${first}`)
+          .set('Authorization', bearer(me.token))
+          .expect(200)
+      ).body as {
+        stops: { id: string; photo: Photo | null; photoSide: string }[];
+      };
+
+      expect(body.stops).toEqual([
+        expect.objectContaining({
+          id: second,
+          photo: expect.objectContaining({ id: photoId }) as unknown,
+          photoSide: 'left',
+        }),
+      ]);
+      expect(storage.keys()).toEqual(
+        [keyOf(photoId), thumbKeyOf(photoId)].sort(),
+      );
+    });
+
+    it('후보로 빼도 같은 자리 장소가 남으면 사진을 그 장소로 넘긴다', async () => {
+      const first = await addStop('숙소');
+      const second = await addStop('숙소');
+      const photoId = await attach(first);
+
+      await api()
+        .post(`/v1/stops/${first}/candidate`)
+        .set('Authorization', bearer(me.token))
+        .expect(200);
+
+      const body = await detail();
+      expect(body.stops.map((s) => [s.id, s.photo?.id])).toEqual([
+        [second, photoId],
+      ]);
+      expect(await prisma.photo.count()).toBe(1);
+    });
+
+    it('다른 자리 장소만 남으면 사진을 지운다', async () => {
+      const a = await addStop('해운대');
+      await addStop('광안리', tripId, { latitude: 35.15, longitude: 129.12 });
+      await attach(a);
+
+      await api()
+        .delete(`/v1/stops/${a}`)
+        .set('Authorization', bearer(me.token))
+        .expect(200);
+
       expect(storage.keys()).toEqual([]);
       expect(await prisma.photo.count()).toBe(0);
     });
