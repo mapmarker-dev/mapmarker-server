@@ -73,6 +73,7 @@ export class StopsService {
           timeZone: dto.timeZone,
           placeProvider: dto.placeProvider,
           placeId: dto.placeId,
+          photoSide: dto.photoSide,
         },
       });
       return applyRoute(tx, tripId, before, after, this.links);
@@ -107,6 +108,7 @@ export class StopsService {
           timeZone: dto.timeZone,
           placeProvider: dto.placeProvider,
           placeId: dto.placeId,
+          photoSide: dto.photoSide,
         },
       });
       await touchTrip(tx, stop.tripId);

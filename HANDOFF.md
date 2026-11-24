@@ -1,14 +1,15 @@
 # HANDOFF
 
-> 최종 갱신: 2026-11-20 · 브랜치: dev
+> 최종 갱신: 2026-11-23 · 브랜치: dev
 
 ## 지금 하는 일
 
-**1-4 여행 중 기능은 끝났다**(서버 몫은 방문 체크, 앱과 실기기 확인까지 마침. 결정은 OVERVIEW "여행 중"). 다음 1-5 이미지 내보내기는 앱만 바뀌어 서버 일이 없다.
+**1-5 후속 "사진 방향"의 서버 몫을 마쳤다**(장소 `photoSide` 칸, 마이그레이션 `stop_photo_side`). 앱과 함께 실기기 확인까지 마쳤다(다음은 문서 정리). 1-5 이미지 내보내기는 앱만 바뀌었다.
 
 ## 다음에 할 첫 단계
 
-1. 다음 서버 일은 1-6 회원 탈퇴다(아래 "다음 단위로 넘길 것"). 다른 컴퓨터에서 받으면 마이그레이션 `stop_visit_check` 때문에 `npm run db:migrate`를 먼저 돌린다.
+1. 다음 서버 일은 1-6 회원 탈퇴다(아래 "다음 단위로 넘길 것"). 다른 컴퓨터에서 받으면 마이그레이션 `stop_photo_side` 때문에 `npm run db:migrate`를 먼저 돌린다.
+   - 새 앱은 장소를 고칠 때마다 `photoSide`를 보낸다. 이 칸이 없는 서버(배포 전 버전)에 보내면 DTO에 없는 필드라 400이니, 서버를 먼저 올린다(1-7 배포 때도 같다).
 
 ## 다음 단위로 넘길 것
 
@@ -17,7 +18,7 @@
 
 ## 현재 상태
 
-- lint, 형식, 단위 171개, 빌드, e2e 310개 통과. e2e마다 pg `client.query()` DeprecationWarning이 한 번 나온다(Prisma 어댑터 문제).
+- lint, 형식, 단위 171개, 빌드, e2e 311개 통과. e2e마다 pg `client.query()` DeprecationWarning이 한 번 나온다(Prisma 어댑터 문제).
 - Prisma 7(어댑터) 오류 코드: 유일 위반 P2002, Restrict P2003, 대상 없음 P2025, CHECK 위반 P2039.
 - `npm audit --omit=dev`: high 3건(`body-parser`, `multer` ← `@nestjs/platform-express`, DoS). 따로 고친다.
 

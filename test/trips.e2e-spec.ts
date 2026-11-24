@@ -244,6 +244,7 @@ describe('여행 API (e2e)', () => {
         timeZone: 'Asia/Seoul',
         placeProvider: 'naver',
         placeId: 'p1',
+        photoSide: 'up',
         photo: null,
       });
       expect(response.body.segments).toEqual([

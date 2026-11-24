@@ -15,7 +15,7 @@ import { IsAppId } from '../../common/app-id';
 import { CanOmit } from '../../common/can-omit.decorator';
 import { IsLocalTime } from '../../common/local-time';
 import { NOT_BLANK } from '../../common/text';
-import { MapProvider, StopKind } from '../../generated/prisma/enums';
+import { MapProvider, PhotoSide, StopKind } from '../../generated/prisma/enums';
 import { MAX_NIGHTS } from './create-trip.dto';
 
 /** 글자 수 상한. 앱의 장소 입력 제한(stop_draft.dart)과 같다. */
@@ -137,4 +137,14 @@ export class CreateStopDto {
   @Matches(NOT_BLANK, { message: 'placeId가 비어 있습니다' })
   @MaxLength(PLACE_ID_MAX_LENGTH)
   placeId?: string | null;
+
+  @ApiPropertyOptional({
+    enum: PhotoSide,
+    enumName: 'PhotoSide',
+    default: 'up',
+    description: '지도에서 사진 마커를 붙일 쪽',
+  })
+  @CanOmit()
+  @IsEnum(PhotoSide)
+  photoSide?: PhotoSide;
 }

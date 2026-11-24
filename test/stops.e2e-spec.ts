@@ -188,6 +188,7 @@ describe('장소 API (e2e)', () => {
         timeZone: 'Asia/Seoul',
         placeProvider: null,
         placeId: null,
+        photoSide: 'up',
         photo: null,
       });
     });
@@ -391,6 +392,21 @@ describe('장소 API (e2e)', () => {
 
       const cleared = await patch(body.id, { address: '' }).expect(200);
       expect(cleared.body).toMatchObject({ address: '' });
+    });
+
+    it('사진 방향을 고친다. 보내지 않으면 그대로이고, null이나 모르는 방향은 400', async () => {
+      const body = stopBody('A', 1, 0, { photoSide: 'left' });
+      expect((await add(body)).stops[0].photoSide).toBe('left');
+
+      const changed = await patch(body.id, { photoSide: 'down' }).expect(200);
+      expect(changed.body).toMatchObject({ photoSide: 'down', name: 'A' });
+
+      await patch(body.id, { name: 'B' }).expect(200);
+      expect((await detail()).stops[0].photoSide).toBe('down');
+
+      await patch(body.id, { photoSide: null }).expect(400);
+      await patch(body.id, { photoSide: 'top' }).expect(400);
+      expect((await detail()).stops[0].photoSide).toBe('down');
     });
 
     it('예정 시각·장소 서비스 ID는 null로 지운다', async () => {

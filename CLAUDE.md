@@ -102,6 +102,7 @@ test/                      *.e2e-spec.ts, setup/(테스트 DB, 환경 변수, �
 - 키(`photo-rules.ts`): `users/{userId}/trips/{tripId}/photos/{photoId}.jpg`와 `_thumb.jpg`, DB에는 원본 키만. 등록된 사진 ID로 업로드 주소를 달라면 409(덮어쓰기 방지).
 - 업로드 주소에는 `image/jpeg`, 바이트 수(원본 5MB, 썸네일 512KB 이하), 태그 `upload=pending`이 서명된다. 수명 주기 규칙이 이 태그의 파일을 하루 뒤 지우고, 등록 트랜잭션 안에서 태그를 뗀다.
 - 장소 응답의 `photo`(`{ id, url, thumbnailUrl }` 또는 null)는 1시간 GET 서명이고 응답마다 새로 만든다(`PhotoLinks`). 1-7에서 CloudFront 서명으로 바꿔도 모양은 같다.
+- **사진 방향** `photoSide`(`up`·`down`·`left`·`right`, 기본 `up`)는 사진이 아니라 장소 칸이다(지도에서 사진 마커를 붙일 쪽). 장소 넣기·고치기에서 받고 null은 400. 사진을 바꾸거나 지워도 남고, 동선에 넣기는 기본값이다.
 - **사진을 지우는 곳은 모두 `deletePhotos`**(S3 파일부터, 그다음 줄): 사진 지우기·바꾸기, 장소 지우기, 후보로 빼기, 영구·예약 삭제. S3를 부르는 트랜잭션은 `PHOTO_TX_OPTIONS`(15초).
 - S3 클라이언트는 `requestChecksumCalculation: 'WHEN_REQUIRED'`다(기본값이면 서명 주소에 빈 본문 체크섬이 들어가 업로드가 거절된다). 닿지 못하거나 5xx·429는 503, 그 밖의 4xx와 자격 증명 오류는 500(로그).
 - 테스트: 단위는 `client.send`를 가짜로, e2e는 `withFakePhotoStorage(builder, fake)`(`upload()`로 앱의 PUT을 흉내, `down`으로 503). 사진을 만들거나 지우는 e2e는 꼭 끼운다.
