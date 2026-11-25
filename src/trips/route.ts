@@ -34,6 +34,33 @@ export function placeStop<T extends RouteStop>(
   return numbered(days);
 }
 
+/**
+ * [day]일차의 장소를 [stopIds] 순서로 늘어놓는다. 다른 일차는 그대로다.
+ * [stopIds]가 그 일차의 장소와 같은 집합(빠짐도 덤도 겹침도 없음)이 아니면 null이다.
+ */
+export function orderDay<T extends RouteStop>(
+  stops: readonly T[],
+  day: number,
+  stopIds: readonly string[],
+): T[] | null {
+  const days = groupByDay(stops);
+  const current = days.get(day) ?? [];
+  const byId = new Map(current.map((stop) => [stop.id, stop]));
+  if (
+    stopIds.length !== current.length ||
+    new Set(stopIds).size !== stopIds.length ||
+    !stopIds.every((id) => byId.has(id))
+  ) {
+    return null;
+  }
+  if (current.length > 0)
+    days.set(
+      day,
+      stopIds.map((id) => byId.get(id)!),
+    );
+  return numbered(days);
+}
+
 /** [stopId] 장소를 빼고 순서를 다시 매긴다. */
 export function removeStop<T extends RouteStop>(
   stops: readonly T[],

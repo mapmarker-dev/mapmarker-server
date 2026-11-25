@@ -2,7 +2,7 @@ import { ApiProperty } from '@nestjs/swagger';
 import { ApiIdProperty } from '../../common/app-id';
 import { formatLocalTime } from '../../common/local-time';
 import type { Stop } from '../../generated/prisma/client';
-import { MapProvider, StopKind } from '../../generated/prisma/enums';
+import { MapProvider, PhotoSide, StopKind } from '../../generated/prisma/enums';
 import { PhotoResponse } from './photo-dtos';
 
 /** 장소. 필드 이름과 모양은 앱 모델(Stop)과 같다. */
@@ -64,6 +64,13 @@ export class StopResponse {
   placeId: string | null;
 
   @ApiProperty({
+    enum: PhotoSide,
+    enumName: 'PhotoSide',
+    description: '지도에서 사진 마커를 붙일 쪽. 사진이 없어도 남아 있다',
+  })
+  photoSide: PhotoSide;
+
+  @ApiProperty({
     type: PhotoResponse,
     nullable: true,
     description: '사진(지금은 장소마다 1장). 없으면 null',
@@ -93,6 +100,7 @@ export function toStopResponse(
     timeZone: stop.timeZone,
     placeProvider: stop.placeProvider,
     placeId: stop.placeId,
+    photoSide: stop.photoSide,
     photo,
   };
 }

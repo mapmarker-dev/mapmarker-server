@@ -1,4 +1,4 @@
-import type { Prisma } from '../generated/prisma/client';
+import type { Prisma, Stop } from '../generated/prisma/client';
 import type { PhotoStorage } from '../storage/photo-storage';
 
 /**
@@ -60,4 +60,46 @@ export async function deletePhotos(
     where: { id: { in: photos.map((photo) => photo.id) } },
   });
   return photos.length;
+}
+
+/**
+ * 장소를 동선에서 빼기 전에(지우기, 후보로 빼기) 그 장소의 사진을 정리한다.
+ *
+ * 같은 여행에서 좌표가 같은 장소(밤마다 넣은 연박 숙소, 처음과 끝이 같은 공항)는 사진 하나와 사진 방향을 함께 쓴다.
+ * 그래서 같은 자리 장소가 남아 있고 그중 사진이 있는 장소가 없으면, 사진과 사진 방향을 동선에서 먼저 오는
+ * 그 장소로 넘긴다. 같은 자리 장소가 없거나 이미 사진이 있으면 이 장소의 사진은 지운다(S3 파일부터).
+ */
+export async function releasePhotos(
+  tx: Prisma.TransactionClient,
+  storage: PhotoStorage,
+  stop: Pick<Stop, 'id' | 'tripId' | 'latitude' | 'longitude' | 'photoSide'>,
+): Promise<void> {
+  const siblings = await tx.stop.findMany({
+    where: {
+      tripId: stop.tripId,
+      latitude: stop.latitude,
+      longitude: stop.longitude,
+      id: { not: stop.id },
+    },
+    orderBy: [{ day: 'asc' }, { order: 'asc' }],
+    select: { id: true, _count: { select: { photos: true } } },
+  });
+  const heir = siblings[0];
+  const hasPhoto = (await tx.photo.count({ where: { stopId: stop.id } })) > 0;
+  if (
+    hasPhoto &&
+    heir &&
+    siblings.every((sibling) => sibling._count.photos === 0)
+  ) {
+    await tx.photo.updateMany({
+      where: { stopId: stop.id },
+      data: { stopId: heir.id },
+    });
+    await tx.stop.update({
+      where: { id: heir.id },
+      data: { photoSide: stop.photoSide },
+    });
+    return;
+  }
+  await deletePhotos(tx, storage, { stopId: stop.id });
 }

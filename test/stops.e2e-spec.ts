@@ -188,6 +188,7 @@ describe('장소 API (e2e)', () => {
         timeZone: 'Asia/Seoul',
         placeProvider: null,
         placeId: null,
+        photoSide: 'up',
         photo: null,
       });
     });
@@ -393,6 +394,21 @@ describe('장소 API (e2e)', () => {
       expect(cleared.body).toMatchObject({ address: '' });
     });
 
+    it('사진 방향을 고친다. 보내지 않으면 그대로이고, null이나 모르는 방향은 400', async () => {
+      const body = stopBody('A', 1, 0, { photoSide: 'left' });
+      expect((await add(body)).stops[0].photoSide).toBe('left');
+
+      const changed = await patch(body.id, { photoSide: 'down' }).expect(200);
+      expect(changed.body).toMatchObject({ photoSide: 'down', name: 'A' });
+
+      await patch(body.id, { name: 'B' }).expect(200);
+      expect((await detail()).stops[0].photoSide).toBe('down');
+
+      await patch(body.id, { photoSide: null }).expect(400);
+      await patch(body.id, { photoSide: 'top' }).expect(400);
+      expect((await detail()).stops[0].photoSide).toBe('down');
+    });
+
     it('예정 시각·장소 서비스 ID는 null로 지운다', async () => {
       const body = stopBody('A', 1, 0, {
         plannedTime: '09:30',
@@ -531,6 +547,90 @@ describe('장소 API (e2e)', () => {
     });
   });
 
+  describe('그날 순서 바꾸기', () => {
+    function orderDay(stopIds: string[], day = 1, token = me.token) {
+      return api()
+        .put(`/v1/trips/${tripId}/stop-order`)
+        .set('Authorization', bearer(token))
+        .send({ day, stopIds });
+    }
+
+    it('그 일차를 보낸 순서로 늘어놓고, 새 순서에서도 이웃인 쌍의 구간과 이동 수단은 남는다', async () => {
+      const { A, B, C, D } = await addAll('A', 'B', 'C', 'D');
+      await add(stopBody('E', 2, 0));
+      const before = await detail();
+      const ab = segmentBetween(before, A, B)!;
+      const cd = segmentBetween(before, C, D)!;
+      for (const segment of [ab, cd]) {
+        await prisma.segment.update({
+          where: { id: segment.id },
+          data: { legs: [{ mode: 'walk' }] },
+        });
+      }
+
+      const route = (await orderDay([C, D, A, B]).expect(200)).body as Detail;
+
+      expect(days(route)).toEqual(['1: C D A B', '2: E']);
+      expect(route.stops.map((s) => s.order)).toEqual([0, 1, 2, 3, 0]);
+      expect(lines(route)).toEqual(['C>D', 'D>A', 'A>B', 'B>E']);
+      expect(segmentBetween(route, A, B)).toMatchObject({
+        id: ab.id,
+        legs: [{ mode: 'walk' }],
+      });
+      expect(segmentBetween(route, C, D)).toMatchObject({
+        id: cd.id,
+        legs: [{ mode: 'walk' }],
+      });
+      expect(Date.parse(route.trip.updatedAt)).toBeGreaterThan(
+        Date.parse(before.trip.updatedAt),
+      );
+    });
+
+    it('그 일차의 장소와 다른 ID 묶음이면 409이고 동선은 그대로다', async () => {
+      const { A, B, C } = await addAll('A', 'B', 'C');
+      const other = stopBody('E', 2, 0);
+      await add(other);
+      const before = await detail();
+
+      await orderDay([B, A]).expect(409);
+      await orderDay([B, A, C, other.id]).expect(409);
+      await orderDay([B, A, uuidv7()]).expect(409);
+
+      expect(await detail()).toEqual(before);
+    });
+
+    it('겹친 ID, v7이 아닌 ID, 일차 범위 밖, 모르는 필드는 400', async () => {
+      const { A, B } = await addAll('A', 'B');
+
+      await orderDay([A, A]).expect(400);
+      await orderDay([A, randomUUID()]).expect(400);
+      await orderDay([B, A], 4).expect(400);
+      await orderDay([B, A], 0).expect(400);
+      await api()
+        .put(`/v1/trips/${tripId}/stop-order`)
+        .set('Authorization', bearer(me.token))
+        .send({ day: 1, stopIds: [B, A], name: 'x' })
+        .expect(400);
+      expect(days(await detail())).toEqual(['1: A B']);
+    });
+
+    it('다른 사람의 여행이나 휴지통에 든 여행은 404, 토큰이 없으면 401', async () => {
+      const { A, B } = await addAll('A', 'B');
+      const other = await createUserWithToken(app);
+
+      await orderDay([B, A], 1, other.token).expect(404);
+      await api()
+        .put(`/v1/trips/${tripId}/stop-order`)
+        .send({ day: 1, stopIds: [B, A] })
+        .expect(401);
+      await api()
+        .delete(`/v1/trips/${tripId}`)
+        .set('Authorization', bearer(me.token))
+        .expect(204);
+      await orderDay([B, A]).expect(404);
+    });
+  });
+
   describe('지우기', () => {
     function remove(stopId: string, token = me.token) {
       return api()
@@ -632,6 +732,7 @@ describe('장소 API (e2e)', () => {
         paths['/v1/trips/{tripId}/stops'].post,
         paths['/v1/stops/{stopId}'].patch,
         paths['/v1/stops/{stopId}/position'].put,
+        paths['/v1/trips/{tripId}/stop-order'].put,
         paths['/v1/stops/{stopId}'].delete,
       ];
 

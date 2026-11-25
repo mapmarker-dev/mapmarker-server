@@ -14,7 +14,7 @@ import { CanOmit } from '../../common/can-omit.decorator';
 import { IsInstant } from '../../common/instant';
 import { IsLocalTime } from '../../common/local-time';
 import { NOT_BLANK } from '../../common/text';
-import { MapProvider, StopKind } from '../../generated/prisma/enums';
+import { MapProvider, PhotoSide, StopKind } from '../../generated/prisma/enums';
 import {
   ADDRESS_MAX_LENGTH,
   PLACE_ID_MAX_LENGTH,
@@ -120,4 +120,13 @@ export class UpdateStopDto {
   @Matches(NOT_BLANK, { message: 'placeId가 비어 있습니다' })
   @MaxLength(PLACE_ID_MAX_LENGTH)
   placeId?: string | null;
+
+  @ApiPropertyOptional({
+    enum: PhotoSide,
+    enumName: 'PhotoSide',
+    description: '지도에서 사진 마커를 붙일 쪽',
+  })
+  @CanOmit()
+  @IsEnum(PhotoSide)
+  photoSide?: PhotoSide;
 }

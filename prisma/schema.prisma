@@ -53,6 +53,14 @@ enum StopKind {
   other
 }
 
+/// 지도에서 사진 마커를 장소의 어느 쪽에 붙일지. 사진이 다른 장소와 선을 가리지 않게 사용자가 고른다.
+enum PhotoSide {
+  up
+  down
+  left
+  right
+}
+
 /// 구간 종류. 직선·곡선은 curvature로 나뉘고, 그리는 방식이 다른 GPS 트랙만 따로 둔다.
 enum SegmentType {
   normal
@@ -189,6 +197,8 @@ model Stop {
   timeZone      String       @default("Asia/Seoul") @map("time_zone")
   placeProvider MapProvider? @map("place_provider")
   placeId       String?      @map("place_id")
+  /// 사진 마커를 붙일 쪽. 사진을 바꾸거나 지워도 남는다(사진이 없으면 쓰지 않는다).
+  photoSide     PhotoSide    @default(up) @map("photo_side")
   createdAt     DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt     DateTime     @updatedAt @map("updated_at") @db.Timestamptz(3)
 

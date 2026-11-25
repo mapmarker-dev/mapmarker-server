@@ -1,15 +1,20 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { PhotoStorage } from '../storage/photo-storage';
 import { CreateStopDto } from './dto/create-stop.dto';
 import { MoveStopDto } from './dto/move-stop.dto';
+import { OrderDayDto } from './dto/order-day.dto';
 import { StopResponse, toStopResponse } from './dto/stop-response.dto';
 import { TripDetailResponse } from './dto/trip-detail-response.dto';
 import { UpdateStopDto } from './dto/update-stop.dto';
 import { PhotoLinks } from './photo-links';
-import { deletePhotos, PHOTO_TX_OPTIONS } from './photo-rules';
+import { PHOTO_TX_OPTIONS, releasePhotos } from './photo-rules';
 import { checkPlace, ensureNotCandidate } from './place-checks';
-import { placeStop, removeStop } from './route';
+import { orderDay, placeStop, removeStop } from './route';
 import {
   applyRoute,
   checkDay,
@@ -73,6 +78,7 @@ export class StopsService {
           timeZone: dto.timeZone,
           placeProvider: dto.placeProvider,
           placeId: dto.placeId,
+          photoSide: dto.photoSide,
         },
       });
       return applyRoute(tx, tripId, before, after, this.links);
@@ -107,6 +113,7 @@ export class StopsService {
           timeZone: dto.timeZone,
           placeProvider: dto.placeProvider,
           placeId: dto.placeId,
+          photoSide: dto.photoSide,
         },
       });
       await touchTrip(tx, stop.tripId);
@@ -143,16 +150,43 @@ export class StopsService {
   }
 
   /**
+   * [dto.day]일차의 장소를 보낸 순서로 늘어놓고 구간을 다시 잇는다. 새 순서에서도 이웃인 쌍의 구간은
+   * 남는다(장소를 하나씩 옮기면 중간에 이웃이 끊겨 이동 수단이 지워질 수 있다).
+   * 보낸 ID가 그 일차의 장소와 같은 집합이 아니면 409다(그사이 다른 기기에서 바뀌었다).
+   */
+  async orderDay(
+    userId: string,
+    tripId: string,
+    dto: OrderDayDto,
+  ): Promise<TripDetailResponse> {
+    return this.prisma.$transaction(async (tx) => {
+      const { nights } = await lockOwnedTrip(tx, userId, tripId);
+      checkDay(nights, dto.day);
+      const before = await routeStops(tx, tripId);
+      const after = orderDay(before, dto.day, dto.stopIds);
+      if (!after) {
+        throw new ConflictException(
+          'stopIds가 그 일차의 장소와 다릅니다. 동선을 다시 받아 보내야 합니다',
+        );
+      }
+      return applyRoute(tx, tripId, before, after, this.links);
+    });
+  }
+
+  /**
    * 장소를 지우고 앞뒤 장소를 새 구간으로 잇는다. 그 장소의 구간은 DB가 함께 지운다.
-   * 사진은 S3 파일부터 지운다. S3에 닿지 못하면 503이고 장소는 그대로다.
+   * 사진은 같은 자리 장소가 남아 있으면 그 장소로 넘기고, 아니면 S3 파일부터 지운다([releasePhotos]).
+   * S3에 닿지 못하면 503이고 장소는 그대로다.
    */
   async remove(userId: string, stopId: string): Promise<TripDetailResponse> {
     const { tripId } = await this.findOwned(userId, stopId);
     return this.prisma.$transaction(async (tx) => {
       await lockOwnedTrip(tx, userId, tripId);
       const before = await routeStops(tx, tripId);
-      if (!before.some((s) => s.id === stopId)) throw new NotFoundException();
-      await deletePhotos(tx, this.storage, { stopId });
+      // 잠그기 전에 다른 요청이 지웠을 수 있어서 잠근 뒤에 다시 읽는다.
+      const stop = await tx.stop.findFirst({ where: { id: stopId, tripId } });
+      if (!stop) throw new NotFoundException();
+      await releasePhotos(tx, this.storage, stop);
       await tx.stop.delete({ where: { id: stopId } });
       return applyRoute(
         tx,
@@ -167,7 +201,8 @@ export class StopsService {
   /**
    * 장소를 같은 ID의 후보로 바꾼다. 장소를 지운 것처럼 앞뒤를 새 구간으로 잇고, 후보는 넣은 순서의 맨 뒤에 온다.
    * 후보로 옮기는 것: 좌표·이름·종류·설명·메모·장소 서비스 ID. 일차·순서·예정 시각·방문·시간대와 닿은 구간의 이동 수단은 사라진다.
-   * 후보에는 사진이 없어서 사진은 S3 파일부터 지운다(앱이 빼기 전에 알린다). S3에 닿지 못하면 503이고 그대로다.
+   * 후보에는 사진이 없어서, 사진은 같은 자리 장소가 남아 있으면 그 장소로 넘기고 아니면 S3 파일부터 지운다
+   * (앱이 빼기 전에 알린다). S3에 닿지 못하면 503이고 그대로다.
    */
   async demote(userId: string, stopId: string): Promise<TripDetailResponse> {
     const { tripId } = await this.findOwned(userId, stopId);
@@ -177,7 +212,7 @@ export class StopsService {
       // 잠그기 전에 다른 요청이 지웠거나 옮겼을 수 있어서 잠근 뒤에 다시 읽는다.
       const stop = await tx.stop.findFirst({ where: { id: stopId, tripId } });
       if (!stop) throw new NotFoundException();
-      await deletePhotos(tx, this.storage, { stopId });
+      await releasePhotos(tx, this.storage, stop);
       await tx.stop.delete({ where: { id: stopId } });
       await tx.candidate.create({
         data: {
